@@ -47,6 +47,56 @@ bool altercation(Fragment *left_fragment, Fragment *right_fragment, int *priorit
     return false;
 }
 
+bool concatenation(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, int depth, int i, char next_char){
+    if(CONCAT_PRIORITY < *priority && depth == 0){
+        if(i >= fragment.start_index+1){
+            left_fragment->end_index = i;
+            right_fragment->start_index = i;
+            *priority = CONCAT_PRIORITY;
+            return true;
+        }
+        else{
+            if(next_char != '\0' && next_char != '*'){
+                left_fragment->end_index = i+1;
+                right_fragment->start_index = i+1;
+                *priority = CONCAT_PRIORITY;
+                return true;
+            } 
+        }
+    }
+    return false;
+}
+
+bool closure(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, bool *final_split, int depth, bool split_found, int i){
+    if(CLOS_PRIORITY < *priority && depth == 0){
+        if(i == fragment.end_index-1 && split_found == false){
+            left_fragment->end_index = i;
+            *final_split = true;
+            *priority = CLOS_PRIORITY;
+            return true;
+        }
+        else{
+            left_fragment->end_index = i;
+            right_fragment->start_index = i+1;
+            *priority = CLOS_PRIORITY;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parenthesis(Fragment fragment, Fragment *left_fragment, bool *final_split, bool split_found, int i){
+    if(i == fragment.end_index-1 && split_found == false){
+        left_fragment->start_index += 1;
+        left_fragment->end_index = i;
+        *final_split = true;
+        return true;
+    }
+    return false;
+}
+
+
+
 
 int find_split_point(char *str, Fragment fragment, bool recursion){
     Fragment left_fragment = {fragment.start_index, fragment.start_index};
@@ -75,58 +125,18 @@ int find_split_point(char *str, Fragment fragment, bool recursion){
                 found_solution = altercation(&left_fragment, &right_fragment, &min_priority, parenthesis_depth, i);
             }
             else if(current_char == '*'){
-                if(CLOS_PRIORITY < min_priority && parenthesis_depth == 0){
-                    if(i == fragment.end_index-1 && split_found == false){
-                        final_split = true;
-                        left_fragment.end_index = i;
-                        min_priority = CLOS_PRIORITY;
-                        found_solution = true;
-                    }
-                    else{
-                        left_fragment.end_index = i;
-                        right_fragment.start_index = i+1;
-                        min_priority = CLOS_PRIORITY;
-                        found_solution = true;
-                    }
-                }
+                found_solution = closure(fragment, &left_fragment, &right_fragment, &min_priority, &final_split, parenthesis_depth, split_found, i);
             }
             else if(current_char == '('){
-                if(CONCAT_PRIORITY < min_priority && parenthesis_depth == 0){
-                    if(i >= fragment.start_index+1){
-                        left_fragment.end_index = i;
-                        right_fragment.start_index = i;
-                        min_priority = CONCAT_PRIORITY;
-                        found_solution = true;
-                    }
-                }
+                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, '\0');
                 parenthesis_depth += 1;
             }
             else if(current_char == ')'){
                 parenthesis_depth -= 1;
-                if(i == fragment.end_index-1 && split_found == false){
-                    final_split = true;
-                    left_fragment.start_index += 1;
-                    left_fragment.end_index = i;
-                    found_solution = true;
-                }
+                found_solution = parenthesis(fragment, &left_fragment, &final_split, split_found, i);
             }
             else{
-                if(CONCAT_PRIORITY < min_priority && parenthesis_depth == 0){
-                    if(i >= fragment.start_index+1){
-                        left_fragment.end_index = i;
-                        right_fragment.start_index = i;
-                        min_priority = CONCAT_PRIORITY;
-                        found_solution = true;
-                    }
-                    else{
-                        if(str[i+1] != '*'){
-                            left_fragment.end_index = i+1;
-                            right_fragment.start_index = i+1;
-                            min_priority = CONCAT_PRIORITY;
-                            found_solution = true;
-                        } 
-                    }
-                }
+                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, str[i+1]);
             }
 
             if(found_solution == true){
