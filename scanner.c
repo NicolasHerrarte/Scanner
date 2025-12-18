@@ -3,19 +3,13 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include "structs.h"
 
 #define MAX_REGEX_LENGTH 32
 
 #define ALT_PRIORITY 0
 #define CONCAT_PRIORITY 1
 #define CLOS_PRIORITY 2
-
-
-typedef struct Transition{
-    int state_from;
-    int state_to;
-    char trans_char;
-} Transition;
 
 typedef struct NFA{
     int* states;
@@ -28,9 +22,19 @@ typedef struct NFA{
 
     int state_amount;
     int transition_amount;
-    int acceptable_states_amount;
+    int acceptable_state_amount;
 
 } NFA;
+
+int NFA_next_state(NFA *nfa){
+    if(nfa->state_amount == 0){
+        nfa->states = malloc(1*sizeof(int));
+        (nfa->states)[0] = 0;
+    }
+    else{
+        nfa->states = realloc(nfa->states, 1*sizeof(int));
+    }
+}
 
 typedef struct Fragment{
     int start_index;
@@ -96,8 +100,6 @@ bool parenthesis(Fragment fragment, Fragment *left_fragment, bool *final_split, 
 }
 
 
-
-
 int find_split_point(char *str, Fragment fragment, bool recursion){
     Fragment left_fragment = {fragment.start_index, fragment.start_index};
     Fragment right_fragment = {fragment.end_index, fragment.end_index};
@@ -145,11 +147,10 @@ int find_split_point(char *str, Fragment fragment, bool recursion){
     }
     }
 
-    //printf("%d\n", final_split);
-    //printf("(%d, %d)", start_index, left_index);
-    //printf("(%d, %d)\n", right_index, end_index);
-    //printf("(%c, %c)", str[start_index], str[left_index]);
-    //printf("(%c, %c)\n", str[right_index], str[end_index-1]);
+    if (parenthesis_depth != 0){
+        printf("Parenthesis Mismatch -> %d", parenthesis_depth);
+        return 0;
+    }
 
     if(recursion == true){
         if(final_split == true){
@@ -164,9 +165,15 @@ int find_split_point(char *str, Fragment fragment, bool recursion){
 
 int main() {
     printf("Scanner...\n");
-    char regex[] = "((((ab|abc|ababc)(bc|c|cde)*)|((ab|abc)*(bc|cde|de)))*(((abc|ab)(bc|cde)*)|((ab|abc)*(bc|c)))*((ab|abc|ababc)*(bc|c)*)*)*((((ab|abc)c*(de|d)|(abc|bc)*(ab|c))((ab|bc)d*|abc))*((ab|abc)d|c*))*(((abc|ab)(bc|cde)*)|(ab|bc)*(cd|de))*((ab|abc)*(bc|c))*)";
-    //printf("%d\n", strlen(regex));
+    char regex[] = "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(regex, fragment_start, true);
+
+    printf("Structs...\n");
+
+    Array arr;
+    int t[5]  = {1,2,3,4,5};
+    initialize_int(&arr, t, 5);
+    print_int("%d", arr);
     return 0;
 }
