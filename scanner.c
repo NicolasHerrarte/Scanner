@@ -90,20 +90,11 @@ int concatenation(Fragment fragment, Fragment *left_fragment, Fragment *right_fr
 }
 
 int closure(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, bool *final_split, int depth, bool split_found, int pass_priority, int i){
-    if(pass_priority <= *priority && depth == 0){
-        if(i == fragment.end_index-1){
-            left_fragment->end_index = i;
-            *final_split = true;
-            *priority = pass_priority;
-            return true;
-        }
-        else{
-            //printf("EARLY\n");
-            //left_fragment->end_index = i;
-            //right_fragment->start_index = i+1;
-            //*priority = pass_priority;
-            //return true;
-        }
+    if(pass_priority <= *priority && depth == 0 && i == fragment.end_index-1){
+        left_fragment->end_index = i;
+        *final_split = true;
+        *priority = pass_priority;
+        return true;
     }
     return false;
 }
