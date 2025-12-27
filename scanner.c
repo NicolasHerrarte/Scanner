@@ -21,7 +21,7 @@ typedef struct Transition{
 
 typedef struct NFA{
     int* states;
-    char* alphabet;
+    char alphabet[256];
     Transition* transitions;
     int* acceptable_states;
 } NFA;
@@ -48,8 +48,11 @@ void NFA_print(NFA nfa){
     }
     printf("\n");
     printf("-- Alphabet --\n");
-    for(int i = 0; i < dynarray_length(nfa.alphabet);i++){
-        printf("%c, ", nfa.alphabet[i]);
+    for(int i = 0; i < 256;i++){
+        if(nfa.alphabet[i] == true){
+            printf("%c, ", (unsigned char) i);
+        }
+        
     }
     printf("\n");
     printf("-- Transitions --\n");
@@ -61,9 +64,9 @@ void NFA_print(NFA nfa){
 
 int NFA_initialize(NFA *nfa){
     nfa->states = dynarray_create(int);
-    nfa->alphabet = dynarray_create(char);
     nfa->transitions = dynarray_create(Transition);
     nfa->acceptable_states = dynarray_create(int);
+    memset(nfa->alphabet, 0, 256);
 }
 
 int NFA_next_state(NFA *nfa){
@@ -83,7 +86,9 @@ Transition NFA_add_transition(NFA *nfa, int _from, int _to, char _trans_char){
     trans.state_to = _to;
     trans.trans_char = _trans_char;
     dynarray_push(nfa->transitions, trans);
-    dynarray_push(nfa->alphabet, _trans_char);
+
+    int int_repr = (unsigned char) _trans_char;
+    nfa->alphabet[int_repr] = 1;
 
     return trans;
 }
@@ -105,7 +110,7 @@ int altercation(Fragment *left_fragment, Fragment *right_fragment, int *priority
 }
 
 int concatenation(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, int depth, int i, char next_char, char prev_char){
-    if(CONCAT_PRIORITY < *priority && depth == 0){
+    if(CONCAT_PRIORITY < *priority && depth == 0 && prev_char != '$'){
         if(i >= fragment.start_index+1){
             left_fragment->end_index = i;
             right_fragment->start_index = i;
@@ -135,7 +140,7 @@ int closure(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment
 }
 
 int fin_type(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, bool *final_split, int depth, int i){
-    if(FIN_PRIORITY <= *priority && depth == 0 && i == fragment.end_index-1){
+    if(FIN_PRIORITY <= *priority && depth == 0 && i == fragment.end_index-2){
         left_fragment->end_index = i;
         *final_split = true;
         *priority = FIN_PRIORITY;
@@ -186,6 +191,14 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
     else{
         for(int i = fragment.start_index;i<fragment.end_index;i++){
             char current_char = str[i];
+            char previous_char;
+            if(i == 0){
+                previous_char = '\0';
+            }
+            else{
+                previous_char = str[i-1];
+            }
+
             if(current_char == '|'){
                 found_solution = altercation(&left_fragment, &right_fragment, &min_priority, parenthesis_depth, i);
             }
@@ -196,16 +209,15 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                 found_solution = fin_type(fragment, &left_fragment, &right_fragment, &min_priority, &final_split, parenthesis_depth, i);
             }
             else if(current_char == '('){
-                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, '\0', str[i-1]);
+                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, '\0', previous_char);
                 parenthesis_depth += 1;
             }
             else if(current_char == ')'){
                 parenthesis_depth -= 1;
                 found_solution = parenthesis(fragment, &left_fragment, &final_split, split_found, i);
             }
-            else if(current_char == '^'){}
             else{
-                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, str[i+1], str[i-1]);
+                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, str[i+1], previous_char);
             }
 
             if(found_solution > 0){
@@ -252,7 +264,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     }
                     return same_fragment;
                 default:
-                    printf("Something is not right\n");
+                    printf("Something is not right");
             }
         }
         else{
@@ -301,7 +313,7 @@ int main() {
 
     NFA nfa;
     NFA_initialize(&nfa);
-    char regex[] = "^(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
+    char regex[] = "(((ab|abc|a)$E*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
