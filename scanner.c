@@ -75,6 +75,16 @@ bool SSS_in(SSubSet subset1, int state){
     return subset1.states[state];
 }
 
+bool SSS_list_in(SSubSet* subset_list, SSubSet elem){
+    for(int i = 0;i<dynarray_length(subset_list);i++){
+        if(!SSS_equal(subset_list[i], elem)){
+            return false
+        }
+    }
+
+    return true;
+}
+
 int* SSS_to_list(SSubSet subset){
     int* sub_list = dynarray_create(int);
     for(int i = 0; i < subset.length;i++){
@@ -462,6 +472,11 @@ void NtoDFA(NFA nfa){
             SSubSet t = e_closure(nfa, delta(nfa, q, c));
 
             q_slot[i] = t;
+
+            if(!SSS_list_in(Q, t)){
+                dynarray_push(Q, t);
+                dynarray_push(worklist, t);
+            }
         }
     }
 }
