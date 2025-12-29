@@ -21,10 +21,68 @@ typedef struct Transition{
 
 typedef struct NFA{
     int* states;
+    int initial_state;
     char alphabet[256];
     Transition* transitions;
     int* acceptable_states;
 } NFA;
+
+typedef struct SSubSet{
+    bool* states;
+    int length;
+} SSubSet;
+
+SSubSet SSS_initialize_empty(int states_length){
+    SSubSet subset;
+    subset.length = states_length;
+    subset.states = malloc(states_length * sizeof(bool));
+    memset(subset.states, 0, states_length * sizeof(bool));
+
+    return subset;
+}
+
+SSubSet SSS_initialize(int states_length, int* add_states, int states_amount){
+    SSubSet subset;
+    subset.length = states_length;
+    subset.states = malloc(states_length * sizeof(bool));
+    memset(subset.states, 0, states_length * sizeof(bool));
+
+    for(int i = 0;i<states_amount;i++){
+        subset.states[add_states[i]] = true;
+    }
+
+    return subset;
+}
+
+void SSS_add(SSubSet* subset, int new_states){
+    subset->states[new_states] = true;
+}
+
+void SSS_remove(SSubSet* subset, int rem_states){
+    subset->states[rem_states] = false;
+}
+
+bool SSS_equal(SSubSet subset1, SSubSet subset2){
+    for(int i = 0;i<subset1.length;i++){
+        if(subset1.states[i] != subset2.states[i]){
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SSS_in(SSubSet subset1, int state){
+    return subset1.states[state];
+}
+
+void SSS_print(SSubSet subset){
+    for(int i = 0; i < subset.length;i++){
+        if(subset.states[i] == true){
+            printf("%d, ", i);
+        } 
+    }
+    printf("\n");
+}
 
 void print_transition(Transition t){
     printf("State: ");
@@ -59,7 +117,9 @@ void NFA_print(NFA nfa){
     for(int i = 0; i < dynarray_length(nfa.transitions);i++){
         print_transition(nfa.transitions[i]);
     }
-    printf("\n");
+
+    printf("-- Starting State --\n");
+    printf("- %d\n", nfa.initial_state);
 }
 
 int NFA_initialize(NFA *nfa){
@@ -185,6 +245,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
         }
         Transition trans = NFA_add_transition(nfa, state_head, state_tail, str[fragment.start_index]);
         Fragment char_fragment = {state_head, state_tail};
+
+        nfa->initial_state = state_head;
         return char_fragment;
     }
 
@@ -253,6 +315,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     if(final_state == true){
                         NFA_add_acceptable_state(nfa, state_tail_alt);
                     }
+
+                    nfa->initial_state = state_head_alt;
                     return alt_fragment;
                 case FIN_PRIORITY:
                     Fragment final_tag_fragment = find_split_point(nfa, str, left_fragment, true, true);
@@ -287,6 +351,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     if(final_state == true){
                         NFA_add_acceptable_state(nfa, state_tail_alt);
                     }
+
+                    nfa->initial_state = state_head_alt;
                     return alt_fragment;
                     
                 case CONCAT_PRIORITY:
@@ -298,6 +364,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     if(final_state == true){
                         NFA_add_acceptable_state(nfa, nfa_right_fragment.end_index);
                     }
+
+                    nfa->initial_state = nfa_left_fragment.start_index;
                     return concat_fragment;
 
                 default:
@@ -306,6 +374,70 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
         }
     }
 }
+
+bool states_in(int* states, int state){
+    bool is_in = false;
+    for(int i = 0;i<dynarray_length(states); i++){
+        if(states[i] == state){
+            is_in = true;
+            break;
+        }
+    }
+
+    return is_in;
+}
+
+SSubSet e_closure(NFA nfa, int* states, int states_amount){
+    int* inspect_states = dynarray_create(int);
+    SSubSet states_closure = SSS_initialize(dynarray_length(nfa.states), states, states_amount);
+    for(int i = 0;i<states_amount;i++){
+        dynarray_push(inspect_states, states[i]);
+    }
+
+    while(dynarray_length(inspect_states) > 0){
+        int n;
+        dynarray_pop(inspect_states, &n);
+        for(int i = 0;i<dynarray_length(nfa.transitions);i++){
+            if(nfa.transitions[i].state_from == n && nfa.transitions[i].trans_char == '@'){
+                if(!SSS_in(states_closure, nfa.transitions[i].state_to)){
+                    dynarray_push(inspect_states, nfa.transitions[i].state_to);
+                    SSS_add(&states_closure, nfa.transitions[i].state_to);
+                }
+            }
+        }
+    }
+
+    dynarray_destroy(inspect_states);
+
+    return states_closure;
+}
+
+int* NFA_transition_function(NFA nfa, int state, char c){
+    int* out_transitions = dynarray_create(int);
+    for(int i = 0;i<dynarray_length(nfa.transitions);i++){
+        if(nfa.transitions[i].state_from == state && nfa.transitions[i].trans_char == c){
+            dynarray_push(out_transitions, nfa.transitions[i].state_to);
+        }
+    }
+
+    return out_transitions;
+}
+
+int* delta(NFA nfa, int* q, char c){
+    int* delta_out = dynarray_create(int);
+    for(int i = 0;i<dynarray_length(q);i++){
+        int* state_transitions = NFA_transition_function(nfa, q[i], c);
+        for(int j = 0;j<dynarray_length(state_transitions);j++){
+            dynarray_push(delta_out, state_transitions[j]);
+        }
+
+        dynarray_destroy(state_transitions);
+    }
+
+    return delta_out;
+}
+
+
 // final test ->  "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*"
 
 int main() {
@@ -313,11 +445,16 @@ int main() {
 
     NFA nfa;
     NFA_initialize(&nfa);
-    char regex[] = "(((ab|abc|a)$E*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
+    char regex[] = "a(b|c)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
     NFA_print(nfa);
+
+    int states[1] = {6};
+
+    SSubSet test_closure = e_closure(nfa, states, 1);
+    SSS_print(test_closure);
 
     //Fragment fragment_start1 = {0, 4};
     //find_split_point(&nfa, regex, fragment_start1, false);
