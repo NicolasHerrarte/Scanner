@@ -13,7 +13,7 @@
 #define FIN_PRIORITY 3
 #define MAX_PRIORITY 4
 
-#define len_nfa_states(nfa) dynarray_length(nfa.states)
+#define len_nfa_states(fa) dynarray_length(fa.states)
 #define bool_table_generator(ret_type, f_name) ret_type* f_name##_b_table_to_list(bool* b_table, int table_size){\
     ret_type* sub_list = dynarray_create(ret_type);\
     for(int i = 0; i < table_size;i++){\
