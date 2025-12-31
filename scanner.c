@@ -34,13 +34,13 @@ typedef struct Transition{
     char trans_char;
 } Transition;
 
-typedef struct NFA{
+typedef struct FA{
     int* states;
     int initial_state;
     bool alphabet[256];
     Transition* transitions;
     int* acceptable_states;
-} NFA;
+} FA;
 
 typedef struct SSubSet{
     bool* states;
@@ -138,32 +138,32 @@ void print_transition(Transition t){
     printf("\n");
 }
 
-void NFA_print(NFA nfa){
+void FA_print(FA fa){
     printf("-- States --\n");
-    for(int i = 0; i < dynarray_length(nfa.states);i++){
-        printf("%d, ", nfa.states[i]);
+    for(int i = 0; i < dynarray_length(fa.states);i++){
+        printf("%d, ", fa.states[i]);
     }
     printf("\n");
     printf("-- Acceptable States --\n");
-    for(int i = 0; i < dynarray_length(nfa.acceptable_states);i++){
-        printf("%d, ", nfa.acceptable_states[i]);
+    for(int i = 0; i < dynarray_length(fa.acceptable_states);i++){
+        printf("%d, ", fa.acceptable_states[i]);
     }
     printf("\n");
     printf("-- Alphabet --\n");
     for(int i = 0; i < 256;i++){
-        if(nfa.alphabet[i] == true){
+        if(fa.alphabet[i] == true){
             printf("%c, ", (unsigned char) i);
         }
         
     }
     printf("\n");
     printf("-- Transitions --\n");
-    for(int i = 0; i < dynarray_length(nfa.transitions);i++){
-        print_transition(nfa.transitions[i]);
+    for(int i = 0; i < dynarray_length(fa.transitions);i++){
+        print_transition(fa.transitions[i]);
     }
 
     printf("-- Starting State --\n");
-    printf("- %d\n", nfa.initial_state);
+    printf("- %d\n", fa.initial_state);
 }
 
 void states_print(int* states){
@@ -174,25 +174,25 @@ void states_print(int* states){
     printf("]\n");
 }
 
-int NFA_initialize(NFA *nfa){
-    nfa->states = dynarray_create(int);
-    nfa->transitions = dynarray_create(Transition);
-    nfa->acceptable_states = dynarray_create(int);
-    memset(nfa->alphabet, 0, 256);
+int FA_initialize(FA *fa){
+    fa->states = dynarray_create(int);
+    fa->transitions = dynarray_create(Transition);
+    fa->acceptable_states = dynarray_create(int);
+    memset(fa->alphabet, 0, 256);
 }
 
-int NFA_next_state(NFA *nfa){
-    int next_int = dynarray_length(nfa->states);
-    dynarray_push(nfa->states, next_int);
+int FA_next_state(FA *fa){
+    int next_int = dynarray_length(fa->states);
+    dynarray_push(fa->states, next_int);
 
     return next_int;
 }
 
-void NFA_add_acceptable_state(NFA *nfa, int acceptable_state){
-    dynarray_push(nfa->acceptable_states, acceptable_state);
+void FA_add_acceptable_state(FA *fa, int acceptable_state){
+    dynarray_push(fa->acceptable_states, acceptable_state);
 }
 
-Transition NFA_add_transition(NFA *nfa, int _from, int _to, char _trans_char){
+Transition NFA_add_transition(FA *nfa, int _from, int _to, char _trans_char){
     Transition trans;
     trans.state_from = _from;
     trans.state_to = _to;
@@ -274,7 +274,7 @@ int parenthesis(Fragment fragment, Fragment *left_fragment, bool *final_split, b
 }
 
 
-Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_state, bool recursion){
+Fragment find_split_point(FA* nfa, char* str, Fragment fragment, bool final_state, bool recursion){
     Fragment left_fragment = {fragment.start_index, fragment.start_index};
     Fragment right_fragment = {fragment.end_index, fragment.end_index};
 
@@ -291,11 +291,11 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
     printf("\n");
 
     if(fragment.start_index == fragment.end_index-1){
-        int state_head = NFA_next_state(nfa);
-        int state_tail = NFA_next_state(nfa);
+        int state_head = FA_next_state(nfa);
+        int state_tail = FA_next_state(nfa);
 
         if(final_state == true){
-            NFA_add_acceptable_state(nfa, state_tail);
+            FA_add_acceptable_state(nfa, state_tail);
         }
         Transition trans = NFA_add_transition(nfa, state_head, state_tail, str[fragment.start_index]);
         Fragment char_fragment = {state_head, state_tail};
@@ -356,8 +356,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                 case CLOS_PRIORITY:
                     Fragment nfa_only_fragment = find_split_point(nfa, str, left_fragment, false, true);
 
-                    int state_head_alt = NFA_next_state(nfa);
-                    int state_tail_alt = NFA_next_state(nfa);
+                    int state_head_alt = FA_next_state(nfa);
+                    int state_tail_alt = FA_next_state(nfa);
                     
                     Transition trans_start = NFA_add_transition(nfa, state_head_alt, nfa_only_fragment.start_index, '@');
                     Transition trans_tail = NFA_add_transition(nfa, nfa_only_fragment.end_index, state_tail_alt, '@');
@@ -367,7 +367,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
                     if(final_state == true){
-                        NFA_add_acceptable_state(nfa, state_tail_alt);
+                        FA_add_acceptable_state(nfa, state_tail_alt);
                     }
 
                     nfa->initial_state = state_head_alt;
@@ -378,7 +378,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                 case MAX_PRIORITY:
                     Fragment same_fragment = find_split_point(nfa, str, left_fragment, false, true);
                     if(final_state == true){
-                        NFA_add_acceptable_state(nfa, same_fragment.end_index);
+                        FA_add_acceptable_state(nfa, same_fragment.end_index);
                     }
                     return same_fragment;
                 default:
@@ -392,8 +392,8 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
             switch(min_priority){
                 case ALT_PRIORITY:
                     //printf("ALTERCATION\n");
-                    int state_head_alt = NFA_next_state(nfa);
-                    int state_tail_alt = NFA_next_state(nfa);
+                    int state_head_alt = FA_next_state(nfa);
+                    int state_tail_alt = FA_next_state(nfa);
 
                     Transition trans_0 = NFA_add_transition(nfa, state_head_alt, nfa_left_fragment.start_index, '@');
                     Transition trans_1 = NFA_add_transition(nfa, state_head_alt, nfa_right_fragment.start_index, '@');
@@ -403,7 +403,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
                     if(final_state == true){
-                        NFA_add_acceptable_state(nfa, state_tail_alt);
+                        FA_add_acceptable_state(nfa, state_tail_alt);
                     }
 
                     nfa->initial_state = state_head_alt;
@@ -416,7 +416,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
                     Fragment concat_fragment = {nfa_left_fragment.start_index, nfa_right_fragment.end_index};
 
                     if(final_state == true){
-                        NFA_add_acceptable_state(nfa, nfa_right_fragment.end_index);
+                        FA_add_acceptable_state(nfa, nfa_right_fragment.end_index);
                     }
 
                     nfa->initial_state = nfa_left_fragment.start_index;
@@ -429,7 +429,7 @@ Fragment find_split_point(NFA* nfa, char* str, Fragment fragment, bool final_sta
     }
 }
 
-SSubSet e_closure(NFA nfa, SSubSet states_closure){
+SSubSet e_closure(FA nfa, SSubSet states_closure){
     int* states = SSS_to_list(states_closure);
     int* inspect_states = dynarray_create(int);
 
@@ -456,7 +456,7 @@ SSubSet e_closure(NFA nfa, SSubSet states_closure){
     return states_closure;
 }
 
-int* NFA_transition_function(NFA nfa, int state, char c){
+int* NFA_transition_function(FA nfa, int state, char c){
     int* out_transitions = dynarray_create(int);
     for(int i = 0;i<dynarray_length(nfa.transitions);i++){
         if(nfa.transitions[i].state_from == state && nfa.transitions[i].trans_char == c){
@@ -467,7 +467,7 @@ int* NFA_transition_function(NFA nfa, int state, char c){
     return out_transitions;
 }
 
-SSubSet delta(NFA nfa, SSubSet q, char c){
+SSubSet delta(FA nfa, SSubSet q, char c){
     SSubSet delta_out = SSS_initialize_empty(len_nfa_states(nfa));
     int* q_list = SSS_to_list(q);
     for(int i = 0;i<q.length;i++){
@@ -482,7 +482,7 @@ SSubSet delta(NFA nfa, SSubSet q, char c){
     return delta_out;
 }
 
-void NtoDFA(NFA nfa){
+void NtoDFA(FA nfa){
 
     int alphabet_length = 0;
     for(int i = 0;i<256;i++){
@@ -535,13 +535,13 @@ void NtoDFA(NFA nfa){
 int main() {
     printf("Scanner...\n");
 
-    NFA nfa;
-    NFA_initialize(&nfa);
+    FA nfa;
+    FA_initialize(&nfa);
     char regex[] = "a(b|c)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
-    NFA_print(nfa);
+    FA_print(nfa);
 
     NtoDFA(nfa);
 
