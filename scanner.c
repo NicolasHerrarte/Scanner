@@ -13,6 +13,21 @@
 #define FIN_PRIORITY 3
 #define MAX_PRIORITY 4
 
+#define len_nfa_states(nfa) dynarray_length(nfa.states)
+#define bool_table_generator(ret_type, f_name) ret_type* f_name##_b_table_to_list(bool* b_table, int table_size){\
+    ret_type* sub_list = dynarray_create(ret_type);\
+    for(int i = 0; i < table_size;i++){\
+        if(b_table[i] == true){\
+            ret_type tmp = (ret_type) i;\
+            dynarray_push(sub_list, tmp);\
+        }\
+    }\
+    return sub_list;\
+}
+
+bool_table_generator(int, int)
+bool_table_generator(unsigned char, char)
+
 typedef struct Transition{
     int state_from;
     int state_to;
@@ -22,7 +37,7 @@ typedef struct Transition{
 typedef struct NFA{
     int* states;
     int initial_state;
-    char alphabet[256];
+    bool alphabet[256];
     Transition* transitions;
     int* acceptable_states;
 } NFA;
@@ -30,11 +45,14 @@ typedef struct NFA{
 typedef struct SSubSet{
     bool* states;
     int length;
+    int states_count;
 } SSubSet;
+
 
 SSubSet SSS_initialize_empty(int states_length){
     SSubSet subset;
     subset.length = states_length;
+    subset.states_count = 0;
     subset.states = malloc(states_length * sizeof(bool));
     memset(subset.states, 0, states_length * sizeof(bool));
 
@@ -44,22 +62,33 @@ SSubSet SSS_initialize_empty(int states_length){
 SSubSet SSS_initialize(int states_length, int* add_states, int states_amount){
     SSubSet subset;
     subset.length = states_length;
+    subset.states_count = 0;
     subset.states = malloc(states_length * sizeof(bool));
     memset(subset.states, 0, states_length * sizeof(bool));
 
     for(int i = 0;i<states_amount;i++){
-        subset.states[add_states[i]] = true;
+        if(subset.states[add_states[i]] == false){
+            subset.states[add_states[i]] = true;
+            subset.states_count += 1;
+        }  
     }
 
     return subset;
 }
 
 void SSS_add(SSubSet* subset, int new_states){
+    if(subset->states[new_states] == false){
+            subset->states[new_states] = true;
+            subset->states_count += 1;
+    }  
     subset->states[new_states] = true;
 }
 
 void SSS_remove(SSubSet* subset, int rem_states){
-    subset->states[rem_states] = false;
+    if(subset->states[rem_states] == true){
+            subset->states[rem_states] = false;
+            subset->states_count -= 1;
+    }  
 }
 
 bool SSS_equal(SSubSet subset1, SSubSet subset2){
@@ -77,22 +106,17 @@ bool SSS_in(SSubSet subset1, int state){
 
 bool SSS_list_in(SSubSet* subset_list, SSubSet elem){
     for(int i = 0;i<dynarray_length(subset_list);i++){
-        if(!SSS_equal(subset_list[i], elem)){
-            return false
+        if(SSS_equal(subset_list[i], elem)){
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
+
 int* SSS_to_list(SSubSet subset){
-    int* sub_list = dynarray_create(int);
-    for(int i = 0; i < subset.length;i++){
-        if(subset.states[i] == true){
-            dynarray_push(sub_list, i);
-        } 
-    }
-    return sub_list;
+    return int_b_table_to_list(subset.states, subset.length);
 }
 
 void SSS_print(SSubSet subset){
@@ -142,6 +166,14 @@ void NFA_print(NFA nfa){
     printf("- %d\n", nfa.initial_state);
 }
 
+void states_print(int* states){
+    printf("[ ");
+    for(int i = 0;i<dynarray_length(states);i++){
+        printf("%d, ", states[i]);
+    }
+    printf("]\n");
+}
+
 int NFA_initialize(NFA *nfa){
     nfa->states = dynarray_create(int);
     nfa->transitions = dynarray_create(Transition);
@@ -167,8 +199,10 @@ Transition NFA_add_transition(NFA *nfa, int _from, int _to, char _trans_char){
     trans.trans_char = _trans_char;
     dynarray_push(nfa->transitions, trans);
 
-    int int_repr = (unsigned char) _trans_char;
-    nfa->alphabet[int_repr] = 1;
+    if(_trans_char != '@'){
+        int int_repr = (unsigned char) _trans_char;
+        nfa->alphabet[int_repr] = 1;
+    }
 
     return trans;
 }
@@ -399,12 +433,13 @@ SSubSet e_closure(NFA nfa, SSubSet states_closure){
     int* states = SSS_to_list(states_closure);
     int* inspect_states = dynarray_create(int);
 
-    for(int i = 0;i<states_closure.length;i++){
+    for(int i = 0;i<states_closure.states_count;i++){
         dynarray_push(inspect_states, states[i]);
     }
 
     while(dynarray_length(inspect_states) > 0){
         int n;
+
         dynarray_pop(inspect_states, &n);
         for(int i = 0;i<dynarray_length(nfa.transitions);i++){
             if(nfa.transitions[i].state_from == n && nfa.transitions[i].trans_char == '@'){
@@ -433,7 +468,7 @@ int* NFA_transition_function(NFA nfa, int state, char c){
 }
 
 SSubSet delta(NFA nfa, SSubSet q, char c){
-    SSubSet delta_out = SSS_initialize_empty(dynarray_length(nfa.states));
+    SSubSet delta_out = SSS_initialize_empty(len_nfa_states(nfa));
     int* q_list = SSS_to_list(q);
     for(int i = 0;i<q.length;i++){
         int* state_transitions = NFA_transition_function(nfa, q_list[i], c);
@@ -449,8 +484,16 @@ SSubSet delta(NFA nfa, SSubSet q, char c){
 
 void NtoDFA(NFA nfa){
 
-    int alphabet_length = dynarray_length(nfa.alphabet);
-    SSubSet n0 = SSS_initialize(dynarray_length(nfa.states), &nfa.initial_state, 1);
+    int alphabet_length = 0;
+    for(int i = 0;i<256;i++){
+        if(nfa.alphabet[i] == true){
+            alphabet_length++;
+        }
+    }
+
+    char* alphabet_list = char_b_table_to_list(nfa.alphabet, 256);
+
+    SSubSet n0 = SSS_initialize(len_nfa_states(nfa), &nfa.initial_state, 1);
     SSubSet q0 = e_closure(nfa, n0);
     
     SSubSet* Q = dynarray_create(SSubSet);
@@ -468,17 +511,22 @@ void NtoDFA(NFA nfa){
         dynarray_push(T, q_slot);
 
         for(int i = 0;i<alphabet_length; i++){
-            char c = nfa.alphabet[i];
+            char c = alphabet_list[i];
             SSubSet t = e_closure(nfa, delta(nfa, q, c));
 
             q_slot[i] = t;
+            printf("Char %c\n", c);
+            SSS_print(t);
 
-            if(!SSS_list_in(Q, t)){
+            if(t.states_count > 0 && !SSS_list_in(Q, t)){
+                printf("Add\n");
                 dynarray_push(Q, t);
                 dynarray_push(worklist, t);
             }
         }
     }
+
+    
 }
 
 
@@ -495,14 +543,19 @@ int main() {
 
     NFA_print(nfa);
 
-    int states[1] = {6};
+    NtoDFA(nfa);
 
-    SSubSet ss_states = SSS_initialize(dynarray_length(nfa.states), states, 1);
+    //int states[1] = {0};
+
+    //SSubSet ss_states = SSS_initialize(len_nfa_states(nfa), states, 1);
     
-    SSubSet test_closure = e_closure(nfa, ss_states);
-    SSubSet delta_test = delta(nfa, test_closure, '@');
-    SSS_print(test_closure);
-    SSS_print(delta_test);
+    //SSubSet delta_test = delta(nfa, ss_states, 'a');
+    //SSS_print(delta_test);
+
+    //SSubSet test_closure = e_closure(nfa, delta_test);
+    //SSS_print(test_closure);
+    
+
 
     //Fragment fragment_start1 = {0, 4};
     //find_split_point(&nfa, regex, fragment_start1, false);
