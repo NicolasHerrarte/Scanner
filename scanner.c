@@ -44,7 +44,7 @@ typedef struct FA{
     int initial_state;
     bool alphabet[256];
     Transition* transitions;
-    int* acceptable_states;
+    AcceptableState* acceptable_states;
 } FA;
 
 typedef struct SSubSet{
@@ -166,7 +166,7 @@ void FA_print(FA fa){
     printf("\n");
     printf("-- Acceptable States --\n");
     for(int i = 0; i < dynarray_length(fa.acceptable_states);i++){
-        printf("%d, ", fa.acceptable_states[i]);
+        printf("(%d-%d), ", fa.acceptable_states[i].state, fa.acceptable_states[i].category);
     }
     printf("\n");
     printf("-- Alphabet --\n");
@@ -197,7 +197,7 @@ void states_print(int* states){
 int FA_initialize(FA *fa){
     fa->states = dynarray_create(int);
     fa->transitions = dynarray_create(Transition);
-    fa->acceptable_states = dynarray_create(int);
+    fa->acceptable_states = dynarray_create(AcceptableState);
     memset(fa->alphabet, 0, 256);
 }
 
@@ -208,14 +208,18 @@ int FA_next_state(FA *fa){
     return next_int;
 }
 
-
-bool FA_valid_state(FA fa, int state_check){
-    for(int i = 0;i<dynarray_length(fa.states);i++){
-        if(fa.states[i] == state_check){
+bool int_dynarray_in(int* arr, int search){
+    for(int i = 0;i<dynarray_length(arr);i++){
+        if(arr[i] == search){
             return true;
         }
     }
     return false;
+}
+
+
+bool FA_valid_state(FA fa, int state_check){
+    return int_dynarray_in(fa.states, state_check);
 }
 
 // Assumes states are ordered and without gaps: state[0] = 0, state[1] = 1, state[2] = 2 ...
@@ -223,9 +227,12 @@ bool FA_fast_valid_state(FA fa, int state_check){
     return (state_check < dynarray_length(fa.states));
 }
 
-void FA_add_acceptable_state(FA *fa, int acceptable_state){
+void FA_add_acceptable_state(FA *fa, int acceptable_state, int category){
     assert(FA_valid_state(*fa, acceptable_state));
-    dynarray_push(fa->acceptable_states, acceptable_state);
+    AcceptableState acc_state;
+    acc_state.state = acceptable_state;
+    acc_state.category = category;
+    dynarray_push(fa->acceptable_states, acc_state);
 }
 
 int acceptable_states_mapping(char c){
@@ -368,7 +375,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
         int state_tail = FA_next_state(nfa);
 
         if(final_state > 0){
-            FA_add_acceptable_state(nfa, state_tail);
+            FA_add_acceptable_state(nfa, state_tail, final_state);
         }
         Transition trans = NFA_add_transition(nfa, state_head, state_tail, str[fragment.start_index]);
         Fragment char_fragment = {state_head, state_tail};
@@ -448,7 +455,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
                     if(final_state > 0){
-                        FA_add_acceptable_state(nfa, state_tail_alt);
+                        FA_add_acceptable_state(nfa, state_tail_alt, final_state);
                     }
 
                     nfa->initial_state = state_head_alt;
@@ -460,7 +467,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                 case MAX_PRIORITY:
                     Fragment same_fragment = find_split_point(nfa, str, left_fragment, 0, true);
                     if(final_state > 0){
-                        FA_add_acceptable_state(nfa, same_fragment.end_index);
+                        FA_add_acceptable_state(nfa, same_fragment.end_index, final_state);
                     }
                     return same_fragment;
                 default:
@@ -485,7 +492,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
                     if(final_state > 0){
-                        FA_add_acceptable_state(nfa, state_tail_alt);
+                        FA_add_acceptable_state(nfa, state_tail_alt, final_state);
                     }
 
                     nfa->initial_state = state_head_alt;
@@ -498,7 +505,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     Fragment concat_fragment = {nfa_left_fragment.start_index, nfa_right_fragment.end_index};
 
                     if(final_state > 0){
-                        FA_add_acceptable_state(nfa, nfa_right_fragment.end_index);
+                        FA_add_acceptable_state(nfa, nfa_right_fragment.end_index, final_state);
                     }
 
                     nfa->initial_state = nfa_left_fragment.start_index;
@@ -615,9 +622,28 @@ FA NtoDFA(FA nfa){
         int next_state = FA_next_state(&dfa);
     }
 
+    for(int i = 0;i<dynarray_length(Q);i++){
+        int max_priority = 0;
+        int max_priority_state;
+        bool is_accepting_state = false;
+        for(int j = 0;j<dynarray_length(nfa.acceptable_states);j++){
+            if(SSS_in(Q[i], nfa.acceptable_states[j].state)){
+                is_accepting_state = true;
+                if(nfa.acceptable_states[j].category > max_priority){
+                    max_priority = nfa.acceptable_states[j].category;
+                    max_priority_state = i;
+                }
+            }
+        }
+        if(is_accepting_state == true){
+            FA_add_acceptable_state(&dfa, max_priority_state, max_priority);
+        }
+    }
+
     dfa.initial_state = 0;
     memcpy(dfa.alphabet, nfa.alphabet, sizeof(bool[256]));
     for(int i = 0;i<dynarray_length(T);i++){
+
         for(int j = 0;j<alphabet_length;j++){
             int d_index = SSS_list_index(Q, T[i][j]);
             if(d_index != -1){
@@ -637,13 +663,15 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char regex[] = "a(b|c$V)*";
+    char regex[] = "a(b$E|c$V)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
     FA_print(nfa);
 
-    NtoDFA(nfa);
+    FA dfa = NtoDFA(nfa);
+
+    FA_print(dfa);
 
     //int states[1] = {0};
 
