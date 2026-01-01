@@ -624,19 +624,17 @@ FA NtoDFA(FA nfa){
 
     for(int i = 0;i<dynarray_length(Q);i++){
         int max_priority = 0;
-        int max_priority_state;
         bool is_accepting_state = false;
         for(int j = 0;j<dynarray_length(nfa.acceptable_states);j++){
             if(SSS_in(Q[i], nfa.acceptable_states[j].state)){
                 is_accepting_state = true;
                 if(nfa.acceptable_states[j].category > max_priority){
                     max_priority = nfa.acceptable_states[j].category;
-                    max_priority_state = i;
                 }
             }
         }
         if(is_accepting_state == true){
-            FA_add_acceptable_state(&dfa, max_priority_state, max_priority);
+            FA_add_acceptable_state(&dfa, i, max_priority);
         }
     }
 
