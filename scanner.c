@@ -53,6 +53,11 @@ typedef struct SSubSet{
     int states_count;
 } SSubSet;
 
+typedef struct Token{
+    char* word;
+    int category;
+} Token;
+
 
 SSubSet SSS_initialize_empty(int states_length){
     SSubSet subset;
@@ -233,6 +238,15 @@ void FA_add_acceptable_state(FA *fa, int acceptable_state, int category){
     acc_state.state = acceptable_state;
     acc_state.category = category;
     dynarray_push(fa->acceptable_states, acc_state);
+}
+
+bool FA_state_is_acceptable(FA fa, int state){
+    for(int i = 0;i<dynarray_length(fa.acceptable_states);i++){
+        if(fa.acceptable_states[i].state == state){
+            return true;
+        }
+    }
+    return false;
 }
 
 int acceptable_states_mapping(char c){
@@ -556,6 +570,17 @@ int* NFA_transition_function(FA nfa, int state, char c){
     return out_transitions;
 }
 
+int DFA_transition_function(FA dfa, int state, char c){
+    int out_transition = -1;
+    for(int i = 0;i<dynarray_length(dfa.transitions);i++){
+        if(dfa.transitions[i].state_from == state && dfa.transitions[i].trans_char == c){
+            out_transition = dfa.transitions[i].state_to;
+        }
+    }
+
+    return out_transition;
+}
+
 SSubSet delta(FA nfa, SSubSet q, char c){
     SSubSet delta_out = SSS_initialize_empty(len_nfa_states(nfa));
     int* q_list = SSS_to_list(q);
@@ -653,6 +678,90 @@ FA NtoDFA(FA nfa){
     return dfa;
 }
 
+int scanner_loop(FA dfa, char* directory){
+    FILE* file_ptr = fopen(directory, "r");
+
+    int current_state = dfa.initial_state;
+    int last_acceptable_state = -1;
+
+    char* curr_word = dynarray_create(char);
+
+    Token* token_list = dynarray_create(Token);
+
+    if(file_ptr == NULL){
+        return 0;
+    }
+
+    while(!feof(file_ptr)){
+        char c = fgetc(file_ptr);
+
+        if(c != EOF){
+            int next_state = DFA_transition_function(dfa, current_state, c);
+        
+            printf("%c", c);
+            printf("%d", next_state);
+            
+            if(next_state == -1){
+                if(last_acceptable_state != -1){
+                    Token t;
+                    char null_token = '\0';
+                    dynarray_push(curr_word, null_token);
+                    t.word = curr_word;
+                    
+                    for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+                        if(dfa.acceptable_states[i].state == last_acceptable_state){
+                            t.category = dfa.acceptable_states[i].category;
+                            break;
+                        };
+                    }
+
+                    printf("\n%s, %d\n", t.word, t.category);
+                    dynarray_push(token_list, t);
+
+                    current_state = DFA_transition_function(dfa, dfa.initial_state, c);
+                    last_acceptable_state = -1;
+                    curr_word = dynarray_create(char);
+                    dynarray_push(curr_word, c);
+                }
+                else{
+                    printf("\nLexer Compilation Error\n");
+                    break;
+                }
+            }
+            else{
+                dynarray_push(curr_word, c);
+                current_state = next_state;
+                if(FA_state_is_acceptable(dfa, current_state)){
+                    last_acceptable_state = current_state;
+                }
+            }
+        }   
+    }
+
+    if(last_acceptable_state != -1){
+        Token t;
+        char null_token = '\0';
+        dynarray_push(curr_word, null_token);
+        t.word = curr_word;
+        
+        for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+            if(dfa.acceptable_states[i].state == last_acceptable_state){
+                t.category = dfa.acceptable_states[i].category;
+                break;
+            };
+        }
+
+        printf("\n%s, %d\n", t.word, t.category);
+        dynarray_push(token_list, t);
+        dynarray_destroy(curr_word);
+    }
+    else{
+        printf("\nLexer Compilation Error\n");
+    }
+
+    printf("\n");
+}
+
 
 // final test ->  "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*"
 
@@ -661,15 +770,17 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char regex[] = "a(b$E|c$V)*";
+    char regex[] = "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
-    FA_print(nfa);
+    //FA_print(nfa);
 
-    FA dfa = NtoDFA(nfa);
+    //FA dfa = NtoDFA(nfa);
 
-    FA_print(dfa);
+    //FA_print(dfa);
+
+    scanner_loop(dfa, "languaje.k");
 
     //int states[1] = {0};
 
