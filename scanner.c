@@ -322,14 +322,15 @@ int concatenation(Fragment fragment, Fragment *left_fragment, Fragment *right_fr
             *priority = CONCAT_PRIORITY;
             return true;
         }
-        else{
-            if(next_char != '\0' && next_char != '*' && next_char != '$'){
-                left_fragment->end_index = i+1;
-                right_fragment->start_index = i+1;
-                *priority = CONCAT_PRIORITY;
-                return true;
-            } 
-        }
+        //im really unsure about this but lets roll
+        //else{
+            //if(next_char != '\0' && next_char != '*' && next_char != '$'){
+                //left_fragment->end_index = i+1;
+                //right_fragment->start_index = i+1;
+                //*priority = CONCAT_PRIORITY;
+                //return true;
+            //} 
+        //}
     }
     return false;
 }
@@ -397,7 +398,19 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
         nfa->initial_state = state_head;
         return char_fragment;
     }
+    else if(fragment.start_index == fragment.end_index-2 && str[fragment.start_index] == '/'){
+        int state_head = FA_next_state(nfa);
+        int state_tail = FA_next_state(nfa);
 
+        if(final_state > 0){
+            FA_add_acceptable_state(nfa, state_tail, final_state);
+        }
+        Transition trans = NFA_add_transition(nfa, state_head, state_tail, str[fragment.start_index+1]);
+        Fragment char_fragment = {state_head, state_tail};
+
+        nfa->initial_state = state_head;
+        return char_fragment;
+    }
     else{
         for(int i = fragment.start_index;i<fragment.end_index;i++){
             char current_char = str[i];
@@ -433,6 +446,10 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
             else if(current_char == ')'){
                 parenthesis_depth -= 1;
                 found_solution = parenthesis(fragment, &left_fragment, &final_split, split_found, i);
+            }
+            else if(current_char == '/'){
+                found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, following_char, previous_char);
+                i++;
             }
             else{
                 found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, following_char, previous_char);
@@ -770,17 +787,17 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char regex[] = "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*";
+    char regex[] = "/((/*)b//c";
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
-    //FA_print(nfa);
+    FA_print(nfa);
 
     //FA dfa = NtoDFA(nfa);
 
     //FA_print(dfa);
 
-    scanner_loop(dfa, "languaje.k");
+    //scanner_loop(dfa, "languaje.k");
 
     //int states[1] = {0};
 
