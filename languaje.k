@@ -1,1 +1,1 @@
-abacabcabbbacccabcbcbcabcbcbabcbabcabcbcabcbcbcc
+int bool   if else while   for elif float   int bool if while float void   string elif  else char void

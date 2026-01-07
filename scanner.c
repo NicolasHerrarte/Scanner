@@ -14,6 +14,8 @@
 #define FIN_PRIORITY 3
 #define MAX_PRIORITY 4
 
+#define EPSILON '@'
+
 #define len_nfa_states(fa) dynarray_length(fa.states)
 #define bool_table_generator(ret_type, f_name) ret_type* f_name##_b_table_to_list(bool* b_table, int table_size){\
     ret_type* sub_list = dynarray_create(ret_type);\
@@ -28,6 +30,13 @@
 
 bool_table_generator(int, int)
 bool_table_generator(unsigned char, char)
+
+enum {
+    INVALID,
+    SPACE,
+    PRIMITIVE,
+    CONTROL
+};
 
 typedef struct AcceptableState{
     int state;
@@ -252,12 +261,14 @@ bool FA_state_is_acceptable(FA fa, int state){
 
 int acceptable_states_mapping(char c){
     switch(c){
-        case 'V':
-            return 1;
-        case 'E':
-            return 2;
+        case 'S':
+            return SPACE;
+        case 'P':
+            return PRIMITIVE;
+        case 'C':
+            return CONTROL;
         default:
-            return 0;
+            return INVALID;
     }
 }
 
@@ -270,7 +281,7 @@ Transition NFA_add_transition(FA *nfa, int _from, int _to, char _trans_char){
     trans.trans_char = _trans_char;
     dynarray_push(nfa->transitions, trans);
 
-    if(_trans_char != '@'){
+    if(_trans_char != EPSILON){
         int int_repr = (unsigned char) _trans_char;
         nfa->alphabet[int_repr] = 1;
     }
@@ -291,7 +302,7 @@ Transition DFA_add_transition(FA *dfa, int _from, int _to, char _trans_char){
     }
     dynarray_push(dfa->transitions, trans);
 
-    if(_trans_char != '@'){
+    if(_trans_char != EPSILON){
         int int_repr = (unsigned char) _trans_char;
         dfa->alphabet[int_repr] = 1;
     }
@@ -480,10 +491,10 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     int state_head_alt = FA_next_state(nfa);
                     int state_tail_alt = FA_next_state(nfa);
                     
-                    Transition trans_start = NFA_add_transition(nfa, state_head_alt, nfa_only_fragment.start_index, '@');
-                    Transition trans_tail = NFA_add_transition(nfa, nfa_only_fragment.end_index, state_tail_alt, '@');
-                    Transition trans_ret = NFA_add_transition(nfa, nfa_only_fragment.end_index, nfa_only_fragment.start_index, '@');
-                    Transition trans_bounce = NFA_add_transition(nfa, state_head_alt, state_tail_alt, '@');
+                    Transition trans_start = NFA_add_transition(nfa, state_head_alt, nfa_only_fragment.start_index, EPSILON);
+                    Transition trans_tail = NFA_add_transition(nfa, nfa_only_fragment.end_index, state_tail_alt, EPSILON);
+                    Transition trans_ret = NFA_add_transition(nfa, nfa_only_fragment.end_index, nfa_only_fragment.start_index, EPSILON);
+                    Transition trans_bounce = NFA_add_transition(nfa, state_head_alt, state_tail_alt, EPSILON);
 
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
@@ -517,10 +528,10 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     int state_head_alt = FA_next_state(nfa);
                     int state_tail_alt = FA_next_state(nfa);
 
-                    Transition trans_0 = NFA_add_transition(nfa, state_head_alt, nfa_left_fragment.start_index, '@');
-                    Transition trans_1 = NFA_add_transition(nfa, state_head_alt, nfa_right_fragment.start_index, '@');
-                    Transition trans_2 = NFA_add_transition(nfa, nfa_left_fragment.end_index, state_tail_alt, '@');
-                    Transition trans_3 = NFA_add_transition(nfa, nfa_right_fragment.end_index, state_tail_alt, '@');
+                    Transition trans_0 = NFA_add_transition(nfa, state_head_alt, nfa_left_fragment.start_index, EPSILON);
+                    Transition trans_1 = NFA_add_transition(nfa, state_head_alt, nfa_right_fragment.start_index, EPSILON);
+                    Transition trans_2 = NFA_add_transition(nfa, nfa_left_fragment.end_index, state_tail_alt, EPSILON);
+                    Transition trans_3 = NFA_add_transition(nfa, nfa_right_fragment.end_index, state_tail_alt, EPSILON);
 
                     Fragment alt_fragment = {state_head_alt, state_tail_alt};
 
@@ -534,7 +545,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                 case CONCAT_PRIORITY:
                     //printf("CONCATENATION\n");
                     
-                    Transition trans = NFA_add_transition(nfa, nfa_left_fragment.end_index, nfa_right_fragment.start_index, '@');
+                    Transition trans = NFA_add_transition(nfa, nfa_left_fragment.end_index, nfa_right_fragment.start_index, EPSILON);
                     Fragment concat_fragment = {nfa_left_fragment.start_index, nfa_right_fragment.end_index};
 
                     if(final_state > 0){
@@ -564,7 +575,7 @@ SSubSet e_closure(FA nfa, SSubSet states_closure){
 
         dynarray_pop(inspect_states, &n);
         for(int i = 0;i<dynarray_length(nfa.transitions);i++){
-            if(nfa.transitions[i].state_from == n && nfa.transitions[i].trans_char == '@'){
+            if(nfa.transitions[i].state_from == n && nfa.transitions[i].trans_char == EPSILON){
                 if(!SSS_in(states_closure, nfa.transitions[i].state_to)){
                     dynarray_push(inspect_states, nfa.transitions[i].state_to);
                     SSS_add(&states_closure, nfa.transitions[i].state_to);
@@ -704,7 +715,7 @@ FA NtoDFA(FA nfa){
     return dfa;
 }
 
-int scanner_loop(FA dfa, char* directory){
+Token* scanner_loop(FA dfa, char* directory){
     FILE* file_ptr = fopen(directory, "r");
 
     int current_state = dfa.initial_state;
@@ -724,8 +735,7 @@ int scanner_loop(FA dfa, char* directory){
         if(c != EOF){
             int next_state = DFA_transition_function(dfa, current_state, c);
         
-            printf("%c", c);
-            printf("%d", next_state);
+            printf("%c %d\n", c, next_state);
             
             if(next_state == -1){
                 if(last_acceptable_state != -1){
@@ -741,11 +751,14 @@ int scanner_loop(FA dfa, char* directory){
                         };
                     }
 
-                    printf("\n%s, %d\n", t.word, t.category);
+                    printf("%s, %d\n", t.word, t.category);
                     dynarray_push(token_list, t);
 
                     current_state = DFA_transition_function(dfa, dfa.initial_state, c);
                     last_acceptable_state = -1;
+                    if(FA_state_is_acceptable(dfa, current_state)){
+                        last_acceptable_state = current_state;
+                    }
                     curr_word = dynarray_create(char);
                     dynarray_push(curr_word, c);
                 }
@@ -779,11 +792,12 @@ int scanner_loop(FA dfa, char* directory){
 
         printf("\n%s, %d\n", t.word, t.category);
         dynarray_push(token_list, t);
-        dynarray_destroy(curr_word);
     }
     else{
         printf("\nLexer Compilation Error\n");
     }
+
+    return token_list;
 
     printf("\n");
 }
@@ -796,45 +810,23 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char raw_reg[] = "abc$Vef";
+    char raw_reg[] = "(if|else|elif|for|while)$C|(int|bool|float|double|string|char|void)$P|(  *)$S";
     char* regex = regex_prep(raw_reg);
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
+    printf("NFA -> \n");
     FA_print(nfa);
 
-    //char c = 'b';
-    //SSubSet q = SSS_initialize_empty(len_nfa_states(nfa));
-    //SSS_add(&q, 7);
-    //SSS_add(&q, 9);
-    //SSS_add(&q, 10);
-    //SSubSet d = delta(nfa, q, c);
-    //SSS_print(q);
-    //SSS_print(d);
+    FA dfa = NtoDFA(nfa);
 
-    //FA dfa = NtoDFA(nfa);
+    printf("DFA -> \n");
+    FA_print(dfa);
 
-    //FA_print(dfa);
+    Token* tokens = scanner_loop(dfa, "languaje.k");
 
-    //scanner_loop(dfa, "languaje.k");
-
-    //int states[1] = {0};
-
-    //SSubSet ss_states = SSS_initialize(len_nfa_states(nfa), states, 1);
-    //SSS_equal(ss_states, ss_states2);
-    
-    //SSubSet delta_test = delta(nfa, ss_states, 'a');
-    //SSS_print(delta_test);
-
-    //SSubSet test_closure = e_closure(nfa, delta_test);
-    //SSS_print(test_closure);
-    
-
-
-    //Fragment fragment_start1 = {0, 4};
-    //find_split_point(&nfa, regex, fragment_start1, false);
-    //Fragment fragment_start2 = {5, 4};
-    //find_split_point(&nfa, regex, fragment_start2, false);
-
+    for(int i = 0;i<dynarray_length(tokens);i++){
+        printf("(%s, %d)\n", tokens[i].word, tokens[i].category);
+    }
     printf("\nStructs...\n");
 }
