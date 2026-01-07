@@ -70,6 +70,18 @@ void *_dynarray_push(void *arr, void *xptr)
     return arr;
 }
 
+
+void *_dynarray_pushleft(void *arr, void *xptr)
+{
+    if (dynarray_length(arr) >= dynarray_capacity(arr))
+        arr = _dynarray_resize(arr);
+
+    memmove(arr + dynarray_stride(arr), arr, dynarray_stride(arr)*dynarray_length(arr));
+    memcpy(arr, xptr, dynarray_stride(arr));
+    _dynarray_field_set(arr, LENGTH, dynarray_length(arr) + 1);
+    return arr;
+}
+
 // Removes the last element in the array, but copies it to `*dest` first.
 void _dynarray_pop(void *arr, void *dest)
 {

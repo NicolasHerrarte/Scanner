@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 #include "dynarray.h"
+#include "re_pp.h"
 
 #define MAX_REGEX_LENGTH 32
 
@@ -315,7 +316,7 @@ int altercation(Fragment *left_fragment, Fragment *right_fragment, int *priority
 }
 
 int concatenation(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, int depth, int i, char next_char, char prev_char){
-    if(CONCAT_PRIORITY < *priority && depth == 0 && prev_char != '$'){
+    if(CONCAT_PRIORITY < *priority && depth == 0){
         if(i >= fragment.start_index+1){
             left_fragment->end_index = i;
             right_fragment->start_index = i;
@@ -438,6 +439,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
             }
             else if(current_char == '$'){
                 found_solution = fin_type(fragment, &left_fragment, &right_fragment, &min_priority, &final_split, &acc_state_identifier, following_char, parenthesis_depth, i);
+                i++;
             }
             else if(current_char == '('){
                 found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, '\0', previous_char);
@@ -601,7 +603,7 @@ int DFA_transition_function(FA dfa, int state, char c){
 SSubSet delta(FA nfa, SSubSet q, char c){
     SSubSet delta_out = SSS_initialize_empty(len_nfa_states(nfa));
     int* q_list = SSS_to_list(q);
-    for(int i = 0;i<q.length;i++){
+    for(int i = 0;i<q.states_count;i++){
         int* state_transitions = NFA_transition_function(nfa, q_list[i], c);
         for(int j = 0;j<dynarray_length(state_transitions);j++){
             SSS_add(&delta_out, state_transitions[j]);
@@ -638,6 +640,8 @@ FA NtoDFA(FA nfa){
         SSubSet q;
         dynarray_pop(worklist, &q);
 
+        //SSS_print(q);
+
         SSubSet* q_slot = malloc(alphabet_length * sizeof(SSubSet));
         dynarray_push(T, q_slot);
 
@@ -652,7 +656,7 @@ FA NtoDFA(FA nfa){
             if(t.states_count > 0 && !SSS_list_in(Q, t)){
                 //printf("Add\n");
                 dynarray_push(Q, t);
-                dynarray_push(worklist, t);
+                dynarray_pushleft(worklist, t);
             }
         }
     }
@@ -667,6 +671,9 @@ FA NtoDFA(FA nfa){
     for(int i = 0;i<dynarray_length(Q);i++){
         int max_priority = 0;
         bool is_accepting_state = false;
+
+        //SSS_print(Q[i]);
+        
         for(int j = 0;j<dynarray_length(nfa.acceptable_states);j++){
             if(SSS_in(Q[i], nfa.acceptable_states[j].state)){
                 is_accepting_state = true;
@@ -685,6 +692,8 @@ FA NtoDFA(FA nfa){
     for(int i = 0;i<dynarray_length(T);i++){
 
         for(int j = 0;j<alphabet_length;j++){
+            //printf("%d, %c\n", i, alphabet_list[j]);
+            //SSS_print(T[i][j]);
             int d_index = SSS_list_index(Q, T[i][j]);
             if(d_index != -1){
                 DFA_add_transition(&dfa, i, d_index, alphabet_list[j]);
@@ -787,11 +796,21 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char regex[] = "/((/*)b//c";
+    char raw_reg[] = "abc$Vef";
+    char* regex = regex_prep(raw_reg);
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
 
     FA_print(nfa);
+
+    //char c = 'b';
+    //SSubSet q = SSS_initialize_empty(len_nfa_states(nfa));
+    //SSS_add(&q, 7);
+    //SSS_add(&q, 9);
+    //SSS_add(&q, 10);
+    //SSubSet d = delta(nfa, q, c);
+    //SSS_print(q);
+    //SSS_print(d);
 
     //FA dfa = NtoDFA(nfa);
 
