@@ -5,6 +5,7 @@
 #include <assert.h>
 #include "dynarray.h"
 #include "re_pp.h"
+#include "subset.h"
 
 #define MAX_REGEX_LENGTH 32
 
@@ -28,8 +29,8 @@
     return sub_list;\
 }
 
-bool_table_generator(int, int)
-bool_table_generator(unsigned char, char)
+//bool_table_generator(int, int)
+//bool_table_generator(unsigned char, char)
 
 enum {
     INVALID,
@@ -57,110 +58,11 @@ typedef struct FA{
     AcceptableState* acceptable_states;
 } FA;
 
-typedef struct SSubSet{
-    bool* states;
-    int length;
-    int states_count;
-} SSubSet;
-
 typedef struct Token{
     char* word;
     int category;
 } Token;
 
-
-SSubSet SSS_initialize_empty(int states_length){
-    SSubSet subset;
-    subset.length = states_length;
-    subset.states_count = 0;
-    subset.states = malloc(states_length * sizeof(bool));
-    memset(subset.states, 0, states_length * sizeof(bool));
-
-    return subset;
-}
-
-SSubSet SSS_initialize(int states_length, int* add_states, int states_amount){
-    SSubSet subset;
-    subset.length = states_length;
-    subset.states_count = 0;
-    subset.states = malloc(states_length * sizeof(bool));
-    memset(subset.states, 0, states_length * sizeof(bool));
-
-    for(int i = 0;i<states_amount;i++){
-        assert(add_states[i] < states_length);
-        if(subset.states[add_states[i]] == false){
-            subset.states[add_states[i]] = true;
-            subset.states_count += 1;
-        }  
-    }
-
-    return subset;
-}
-
-void SSS_add(SSubSet* subset, int new_state){
-    assert(new_state < subset->length);
-    if(subset->states[new_state] == false){
-            subset->states[new_state] = true;
-            subset->states_count += 1;
-    }  
-    subset->states[new_state] = true;
-}
-
-void SSS_remove(SSubSet* subset, int rem_state){
-    assert(rem_state < subset->length);
-    if(subset->states[rem_state] == true){
-            subset->states[rem_state] = false;
-            subset->states_count -= 1;
-    }  
-}
-
-bool SSS_equal(SSubSet subset1, SSubSet subset2){
-    assert(subset1.length == subset2.length);
-    for(int i = 0;i<subset1.length;i++){
-        if(subset1.states[i] != subset2.states[i]){
-            return false;
-        }
-    }
-    return true;
-}
-
-bool SSS_in(SSubSet subset1, int state){
-    assert(state < subset1.length);
-    return subset1.states[state];
-}
-
-bool SSS_list_in(SSubSet* subset_list, SSubSet elem){
-    for(int i = 0;i<dynarray_length(subset_list);i++){
-        if(SSS_equal(subset_list[i], elem)){
-            return true;
-        }
-    }
-
-    return false;
-}
-
-int SSS_list_index(SSubSet* subset_list, SSubSet elem){
-    for(int i = 0;i<dynarray_length(subset_list);i++){
-        if(SSS_equal(subset_list[i], elem)){
-            return i;
-        }
-    }
-
-    return -1;
-}
-
-int* SSS_to_list(SSubSet subset){
-    return int_b_table_to_list(subset.states, subset.length);
-}
-
-void SSS_print(SSubSet subset){
-    for(int i = 0; i < subset.length;i++){
-        if(subset.states[i] == true){
-            printf("%d, ", i);
-        } 
-    }
-    printf("\n");
-}
 
 void print_transition(Transition t){
     printf("State: ");
@@ -557,11 +459,11 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
     }
 }
 
-SSubSet e_closure(FA nfa, SSubSet states_closure){
-    int* states = SSS_to_list(states_closure);
+Subset e_closure(FA nfa, Subset states_closure){
+    int* states = SS_to_list_indexes(states_closure);
     int* inspect_states = dynarray_create(int);
 
-    for(int i = 0;i<states_closure.states_count;i++){
+    for(int i = 0;i<states_closure.count;i++){
         dynarray_push(inspect_states, states[i]);
     }
 
@@ -571,9 +473,9 @@ SSubSet e_closure(FA nfa, SSubSet states_closure){
         dynarray_pop(inspect_states, &n);
         for(int i = 0;i<dynarray_length(nfa.transitions);i++){
             if(nfa.transitions[i].state_from == n && nfa.transitions[i].trans_char == EPSILON){
-                if(!SSS_in(states_closure, nfa.transitions[i].state_to)){
+                if(!SS_in(states_closure, nfa.transitions[i].state_to)){
                     dynarray_push(inspect_states, nfa.transitions[i].state_to);
-                    SSS_add(&states_closure, nfa.transitions[i].state_to);
+                    SS_add(&states_closure, nfa.transitions[i].state_to);
                 }
             }
         }
@@ -606,13 +508,13 @@ int DFA_transition_function(FA dfa, int state, char c){
     return out_transition;
 }
 
-SSubSet delta(FA nfa, SSubSet q, char c){
-    SSubSet delta_out = SSS_initialize_empty(len_nfa_states(nfa));
-    int* q_list = SSS_to_list(q);
-    for(int i = 0;i<q.states_count;i++){
+Subset delta(FA nfa, Subset q, char c){
+    Subset delta_out = SS_initialize_empty(len_nfa_states(nfa));
+    int* q_list = SS_to_list_indexes(q);
+    for(int i = 0;i<q.count;i++){
         int* state_transitions = NFA_transition_function(nfa, q_list[i], c);
         for(int j = 0;j<dynarray_length(state_transitions);j++){
-            SSS_add(&delta_out, state_transitions[j]);
+            SS_add(&delta_out, state_transitions[j]);
         }
 
         dynarray_destroy(state_transitions);
@@ -630,36 +532,36 @@ FA NtoDFA(FA nfa){
         }
     }
 
-    char* alphabet_list = char_b_table_to_list(nfa.alphabet, 256);
+    char* alphabet_list = char_b_table_to_list(nfa.alphabet);
 
-    SSubSet n0 = SSS_initialize(len_nfa_states(nfa), &nfa.initial_state, 1);
-    SSubSet q0 = e_closure(nfa, n0);
+    Subset n0 = SS_initialize(len_nfa_states(nfa), &nfa.initial_state, 1);
+    Subset q0 = e_closure(nfa, n0);
     
-    SSubSet* Q = dynarray_create(SSubSet);
-    SSubSet** T = dynarray_create(SSubSet*);
-    SSubSet* worklist = dynarray_create(SSubSet);
+    Subset* Q = dynarray_create(Subset);
+    Subset** T = dynarray_create(Subset*);
+    Subset* worklist = dynarray_create(Subset);
 
     dynarray_push(Q, q0);
     dynarray_push(worklist, q0);
 
     while(dynarray_length(worklist) > 0){
-        SSubSet q;
+        Subset q;
         dynarray_pop(worklist, &q);
 
         //SSS_print(q);
 
-        SSubSet* q_slot = malloc(alphabet_length * sizeof(SSubSet));
+        Subset* q_slot = malloc(alphabet_length * sizeof(Subset));
         dynarray_push(T, q_slot);
 
         for(int i = 0;i<alphabet_length; i++){
             char c = alphabet_list[i];
-            SSubSet t = e_closure(nfa, delta(nfa, q, c));
+            Subset t = e_closure(nfa, delta(nfa, q, c));
 
             q_slot[i] = t;
             //printf("Char %c\n", c);
             //SSS_print(t);
 
-            if(t.states_count > 0 && !SSS_list_in(Q, t)){
+            if(t.count > 0 && !SS_list_in(Q, t)){
                 //printf("Add\n");
                 dynarray_push(Q, t);
                 dynarray_pushleft(worklist, t);
@@ -681,7 +583,7 @@ FA NtoDFA(FA nfa){
         //SSS_print(Q[i]);
         
         for(int j = 0;j<dynarray_length(nfa.acceptable_states);j++){
-            if(SSS_in(Q[i], nfa.acceptable_states[j].state)){
+            if(SS_in(Q[i], nfa.acceptable_states[j].state)){
                 is_accepting_state = true;
                 if(nfa.acceptable_states[j].category > max_priority){
                     max_priority = nfa.acceptable_states[j].category;
@@ -700,7 +602,7 @@ FA NtoDFA(FA nfa){
         for(int j = 0;j<alphabet_length;j++){
             //printf("%d, %c\n", i, alphabet_list[j]);
             //SSS_print(T[i][j]);
-            int d_index = SSS_list_index(Q, T[i][j]);
+            int d_index = SS_list_index(Q, T[i][j]);
             if(d_index != -1){
                 DFA_add_transition(&dfa, i, d_index, alphabet_list[j]);
             }
