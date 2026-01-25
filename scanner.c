@@ -18,19 +18,6 @@
 #define EPSILON '@'
 
 #define len_nfa_states(fa) dynarray_length(fa.states)
-#define bool_table_generator(ret_type, f_name) ret_type* f_name##_b_table_to_list(bool* b_table, int table_size){\
-    ret_type* sub_list = dynarray_create(ret_type);\
-    for(int i = 0; i < table_size;i++){\
-        if(b_table[i] == true){\
-            ret_type tmp = (ret_type) i;\
-            dynarray_push(sub_list, tmp);\
-        }\
-    }\
-    return sub_list;\
-}
-
-//bool_table_generator(int, int)
-//bool_table_generator(unsigned char, char)
 
 enum {
     INVALID,
