@@ -149,7 +149,6 @@ int SSS_list_index(SSubSet* subset_list, SSubSet elem){
     return -1;
 }
 
-
 int* SSS_to_list(SSubSet subset){
     return int_b_table_to_list(subset.states, subset.length);
 }
@@ -259,17 +258,8 @@ bool FA_state_is_acceptable(FA fa, int state){
     return false;
 }
 
-int acceptable_states_mapping(char c){
-    switch(c){
-        case 'S':
-            return SPACE;
-        case 'P':
-            return PRIMITIVE;
-        case 'C':
-            return CONTROL;
-        default:
-            return INVALID;
-    }
+int acceptable_states_mapping(char* c){
+    return atoi(c);
 }
 
 Transition NFA_add_transition(FA *nfa, int _from, int _to, char _trans_char){
@@ -358,7 +348,7 @@ int closure(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment
 }
 
 int fin_type(Fragment fragment, Fragment *left_fragment, Fragment *right_fragment, int *priority, bool *final_split, char* state_identifier, char next_char, int depth, int i){
-    if(FIN_PRIORITY <= *priority && depth == 0 && i == fragment.end_index-2){
+    if(FIN_PRIORITY <= *priority && depth == 0 && i == fragment.end_index-3){
         left_fragment->end_index = i;
         *final_split = true;
         *priority = FIN_PRIORITY;
@@ -450,7 +440,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
             }
             else if(current_char == '$'){
                 found_solution = fin_type(fragment, &left_fragment, &right_fragment, &min_priority, &final_split, &acc_state_identifier, following_char, parenthesis_depth, i);
-                i++;
+                i += 2;
             }
             else if(current_char == '('){
                 found_solution = concatenation(fragment, &left_fragment, &right_fragment, &min_priority, parenthesis_depth, i, '\0', previous_char);
@@ -505,7 +495,12 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     nfa->initial_state = state_head_alt;
                     return alt_fragment;
                 case FIN_PRIORITY:
-                    int num_state_identifier = acceptable_states_mapping(acc_state_identifier);
+                    char char_identifier[3];
+
+                    char_identifier[0] = str[left_fragment.end_index+1];
+                    char_identifier[1] = str[left_fragment.end_index+2];
+                    char_identifier[2] = '\0';
+                    int num_state_identifier = acceptable_states_mapping(char_identifier);
                     Fragment final_tag_fragment = find_split_point(nfa, str, left_fragment, num_state_identifier, true);
                     return final_tag_fragment;
                 case MAX_PRIORITY:
@@ -810,7 +805,7 @@ int main() {
 
     FA nfa;
     FA_initialize(&nfa);
-    char raw_reg[] = "(if|else|elif|for|while)$C|(int|bool|float|double|string|char|void)$P|(  *)$S";
+    char raw_reg[] = "(if|else|elif|for|while)$03|(int|bool|float|double|string|char|void)$02|(  *)$01";
     char* regex = regex_prep(raw_reg);
     Fragment fragment_start = {0, strlen(regex)};
     find_split_point(&nfa, regex, fragment_start, false, true);
