@@ -258,7 +258,7 @@ int parenthesis(Fragment fragment, Fragment *left_fragment, bool *final_split, b
 }
 
 
-Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state, bool recursion){
+Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state, bool recursion, bool debug){
     Fragment left_fragment = {fragment.start_index, fragment.start_index};
     Fragment right_fragment = {fragment.end_index, fragment.end_index};
 
@@ -271,10 +271,12 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
 
     char acc_state_identifier = '\0';
 
-    for(int i = fragment.start_index;i<fragment.end_index;i++){
-        printf("%c", str[i]);
+    if(debug){
+        for(int i = fragment.start_index;i<fragment.end_index;i++){
+            printf("%c", str[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
 
     if(fragment.start_index == fragment.end_index-1){
         int state_head = FA_next_state(nfa);
@@ -682,10 +684,42 @@ Token* scanner_loop(FA dfa, char* directory){
     }
 
     return token_list;
-
-    printf("\n");
 }
 
+FA MakeFA(char *src, bool debug){
+    if(debug){
+        printf("\ninitializing non finite automata...\n");
+    }
+    FA nfa;
+    FA_initialize(&nfa);
+    if(debug){
+        printf("\npreprocessign regex...\n");
+    }
+    char* regex = regex_prep(src);
+    Fragment fragment_start = {0, strlen(regex)};
+
+    if(debug){
+        printf("Processsed Regex -> \n");
+        printf("%s\n", regex);
+        printf("\ncreating thomson's construction...\n");
+    }
+
+    find_split_point(&nfa, regex, fragment_start, false, true, debug);
+
+    if(debug){
+        printf("NFA -> \n");
+        FA_print(nfa);
+        printf("\nsubset creation to definite finite automata...\n");
+    }
+    FA dfa = NtoDFA(nfa);
+
+    if(debug){
+        printf("DFA -> \n");
+        FA_print(dfa);
+    }
+
+    return dfa;
+}
 
 // final test ->  "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*"
 
