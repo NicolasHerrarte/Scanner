@@ -1,0 +1,8 @@
+# VS Code files
+.vscode/
+
+# Visual Studio temporary files
+.vs/
+
+# Ignore executable files
+*.exe

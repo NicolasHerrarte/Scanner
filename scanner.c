@@ -6,87 +6,67 @@
 #include "dynarray.h"
 #include "re_pp.h"
 #include "subset.h"
-
-#define MAX_REGEX_LENGTH 32
-
-#define ALT_PRIORITY 0
-#define CONCAT_PRIORITY 1
-#define CLOS_PRIORITY 2
-#define FIN_PRIORITY 3
-#define MAX_PRIORITY 4
-
-#define EPSILON '@'
-
-#define len_nfa_states(fa) dynarray_length(fa.states)
-
-enum {
-    INVALID,
-    SPACE,
-    PRIMITIVE,
-    CONTROL
-};
-
-typedef struct AcceptableState{
-    int state;
-    int category;
-}  AcceptableState;
-
-typedef struct Transition{
-    int state_from;
-    int state_to;
-    char trans_char;
-} Transition;
-
-typedef struct FA{
-    int* states;
-    int initial_state;
-    bool alphabet[256];
-    Transition* transitions;
-    AcceptableState* acceptable_states;
-} FA;
-
-typedef struct Token{
-    char* word;
-    int category;
-} Token;
+#include "scanner.h"
 
 
-void print_transition(Transition t){
-    printf("State: ");
-    printf("%d ", t.state_from);
-    printf("- ");
-    printf("%c ", t.trans_char);
-    printf("-> State: ");
-    printf("%d", t.state_to);
-    printf("\n");
+void export_safe_char(char c, FILE* out) {
+    switch (c) {
+        case '\n': fprintf(out, "\\n"); break;
+        case '\t': fprintf(out, "\\t"); break;
+        case '\r': fprintf(out, "\\r"); break;
+        case ' ':  fprintf(out, "[SPC]"); break; // Or " " if you prefer
+        default:   fprintf(out, "%c", c);   break;
+    }
 }
 
-void FA_print(FA fa){
-    printf("-- States --\n");
+void print_safe_char(char c) {
+    export_safe_char(c, stdout);
+}
+
+void print_transition(Transition t){
+    export_transition(t, stdout);
+}
+
+void export_transition(Transition t, FILE* out){
+    fprintf(out, "State: ");
+    fprintf(out, "%d ", t.state_from);
+    fprintf(out, "- ");
+    export_safe_char(t.trans_char, out);
+    fprintf(out, "-> State: ");
+    fprintf(out, "%d", t.state_to);
+    fprintf(out, "\n");
+}
+
+void FA_export(FA fa, FILE* out){
+    fprintf(out, "-- States --\n");
     for(int i = 0; i < dynarray_length(fa.states);i++){
-        printf("%d, ", fa.states[i]);
+        fprintf(out, "%d, ", fa.states[i]);
     }
-    printf("\n");
-    printf("-- Acceptable States --\n");
+    fprintf(out, "\n");
+    fprintf(out, "-- Acceptable States --\n");
     for(int i = 0; i < dynarray_length(fa.acceptable_states);i++){
-        printf("(%d-%d), ", fa.acceptable_states[i].state, fa.acceptable_states[i].category);
+        fprintf(out, "(%d-%d), ", fa.acceptable_states[i].state, fa.acceptable_states[i].category);
     }
-    printf("\n");
-    printf("-- Alphabet --\n");
+    fprintf(out, "\n");
+    fprintf(out, "-- Alphabet --\n");
     for(int i = 0; i < 256;i++){
         if(fa.alphabet[i] == true){
-            printf("%c, ", (unsigned char) i);
+            export_safe_char((unsigned char) i, out);
         }
         
     }
-    printf("\n");
-    printf("-- Transitions --\n");
+    fprintf(out, "\n");
+    //printf("-- Transitions --\n");
     for(int i = 0; i < dynarray_length(fa.transitions);i++){
-        print_transition(fa.transitions[i]);
+        export_transition(fa.transitions[i], out);
     }
 
-    printf("-- Starting State --\n");
-    printf("- %d\n", fa.initial_state);
+    fprintf(out, "-- Starting State --\n");
+    fprintf(out, "- %d\n", fa.initial_state);
+}
+
+void FA_print(FA fa){
+    FA_export(fa, stdout);
 }
 
 void states_print(int* states){
@@ -95,6 +75,16 @@ void states_print(int* states){
         printf("%d, ", states[i]);
     }
     printf("]\n");
+}
+
+void print_token_seq(Token* tokens){
+    export_token_seq(tokens, stdout);
+}
+
+void export_token_seq(Token* tokens, FILE* out){
+    for(int i = 0;i<dynarray_length(tokens);i++){
+        fprintf(out, "(%s, %d)\n", tokens[i].word, tokens[i].category);
+    }
 }
 
 int FA_initialize(FA *fa){
@@ -189,11 +179,6 @@ Transition DFA_add_transition(FA *dfa, int _from, int _to, char _trans_char){
     return trans;
 }
 
-typedef struct Fragment{
-    int start_index;
-    int end_index;
-} Fragment;
-
 
 int altercation(Fragment *left_fragment, Fragment *right_fragment, int *priority, int depth, int i){
     if(ALT_PRIORITY < *priority && depth == 0){
@@ -257,7 +242,6 @@ int parenthesis(Fragment fragment, Fragment *left_fragment, bool *final_split, b
     return false;
 }
 
-
 Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state, bool recursion, bool debug){
     Fragment left_fragment = {fragment.start_index, fragment.start_index};
     Fragment right_fragment = {fragment.end_index, fragment.end_index};
@@ -273,7 +257,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
 
     if(debug){
         for(int i = fragment.start_index;i<fragment.end_index;i++){
-            printf("%c", str[i]);
+            print_safe_char(str[i]);
         }
         printf("\n");
     }
@@ -354,12 +338,13 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
             }
     }
     }
-
+    
     if (parenthesis_depth != 0){
         printf("Parenthesis Mismatch -> %d", parenthesis_depth);
         Fragment error_fragment = {0, 0};
-        return error_fragment;
     }
+
+    assert(parenthesis_depth == 0);
 
     //printf("(%d, %d) (%d, %d)\n",left_fragment.start_index, left_fragment.end_index, right_fragment.start_index, left_fragment.end_index);
 
@@ -367,7 +352,7 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
         if(final_split == true){
             switch(min_priority){
                 case CLOS_PRIORITY:
-                    Fragment nfa_only_fragment = find_split_point(nfa, str, left_fragment, 0, true);
+                    Fragment nfa_only_fragment = find_split_point(nfa, str, left_fragment, 0, true, debug);
 
                     int state_head_alt = FA_next_state(nfa);
                     int state_tail_alt = FA_next_state(nfa);
@@ -392,10 +377,10 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
                     char_identifier[1] = str[left_fragment.end_index+2];
                     char_identifier[2] = '\0';
                     int num_state_identifier = acceptable_states_mapping(char_identifier);
-                    Fragment final_tag_fragment = find_split_point(nfa, str, left_fragment, num_state_identifier, true);
+                    Fragment final_tag_fragment = find_split_point(nfa, str, left_fragment, num_state_identifier, true, debug);
                     return final_tag_fragment;
                 case MAX_PRIORITY:
-                    Fragment same_fragment = find_split_point(nfa, str, left_fragment, 0, true);
+                    Fragment same_fragment = find_split_point(nfa, str, left_fragment, 0, true, debug);
                     if(final_state > 0){
                         FA_add_acceptable_state(nfa, same_fragment.end_index, final_state);
                     }
@@ -405,8 +390,8 @@ Fragment find_split_point(FA* nfa, char* str, Fragment fragment, int final_state
             }
         }
         else{
-            Fragment nfa_left_fragment = find_split_point(nfa, str, left_fragment, 0, true);
-            Fragment nfa_right_fragment = find_split_point(nfa, str, right_fragment, 0, true);
+            Fragment nfa_left_fragment = find_split_point(nfa, str, left_fragment, 0, true, debug);
+            Fragment nfa_right_fragment = find_split_point(nfa, str, right_fragment, 0, true, debug);
 
             switch(min_priority){
                 case ALT_PRIORITY:
@@ -601,7 +586,7 @@ FA NtoDFA(FA nfa){
     return dfa;
 }
 
-Token* scanner_loop(FA dfa, char* directory){
+Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_ignore){
     FILE* file_ptr = fopen(directory, "r");
 
     int current_state = dfa.initial_state;
@@ -611,56 +596,64 @@ Token* scanner_loop(FA dfa, char* directory){
 
     Token* token_list = dynarray_create(Token);
 
-    if(file_ptr == NULL){
-        return 0;
-    }
+    assert(file_ptr != NULL);
 
-    while(!feof(file_ptr)){
-        char c = fgetc(file_ptr);
+    int c_int;
+    while((c_int = fgetc(file_ptr)) != EOF){
 
-        if(c != EOF){
-            int next_state = DFA_transition_function(dfa, current_state, c);
+        char c = (char) c_int;
+
+        int next_state = DFA_transition_function(dfa, current_state, c);
+    
+        //printf("%c %d\n", c, next_state);
         
-            printf("%c %d\n", c, next_state);
-            
-            if(next_state == -1){
-                if(last_acceptable_state != -1){
-                    Token t;
-                    char null_token = '\0';
-                    dynarray_push(curr_word, null_token);
-                    t.word = curr_word;
-                    
-                    for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-                        if(dfa.acceptable_states[i].state == last_acceptable_state){
-                            t.category = dfa.acceptable_states[i].category;
-                            break;
-                        };
-                    }
+        if(next_state == -1){
+            if(last_acceptable_state != -1){
+                Token t;
+                char null_token = '\0';
+                dynarray_push(curr_word, null_token);
+                t.word = curr_word;
+                
+                for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+                    if(dfa.acceptable_states[i].state == last_acceptable_state){
+                        t.category = dfa.acceptable_states[i].category;
+                        break;
+                    };
+                }
 
-                    printf("%s, %d\n", t.word, t.category);
+                //printf("%s, %d\n", t.word, t.category);
+                bool is_ignore = false;
+                for(int i=0;i<amount_ignore;i++){
+                    if(ignore_cats[i]==t.category){
+                        is_ignore = true;
+                    }
+                }
+
+                if(!is_ignore){
                     dynarray_push(token_list, t);
+                }
 
-                    current_state = DFA_transition_function(dfa, dfa.initial_state, c);
-                    last_acceptable_state = -1;
-                    if(FA_state_is_acceptable(dfa, current_state)){
-                        last_acceptable_state = current_state;
-                    }
-                    curr_word = dynarray_create(char);
-                    dynarray_push(curr_word, c);
-                }
-                else{
-                    printf("\nLexer Compilation Error\n");
-                    break;
-                }
-            }
-            else{
-                dynarray_push(curr_word, c);
-                current_state = next_state;
+                current_state = DFA_transition_function(dfa, dfa.initial_state, c);
+                last_acceptable_state = -1;
                 if(FA_state_is_acceptable(dfa, current_state)){
                     last_acceptable_state = current_state;
                 }
+                curr_word = dynarray_create(char);
+                dynarray_push(curr_word, c);
             }
-        }   
+            else{
+                printf("\nLexer Compilation Error\n");
+                break;
+            }
+        }
+        else{
+            dynarray_push(curr_word, c);
+            current_state = next_state;
+            if(FA_state_is_acceptable(dfa, current_state)){
+                last_acceptable_state = current_state;
+            }
+        }
+         
     }
 
     if(last_acceptable_state != -1){
@@ -676,8 +669,22 @@ Token* scanner_loop(FA dfa, char* directory){
             };
         }
 
-        printf("\n%s, %d\n", t.word, t.category);
-        dynarray_push(token_list, t);
+        bool is_ignore = false;
+        for(int i=0;i<amount_ignore;i++){
+            if(ignore_cats[i]==t.category){
+                is_ignore = true;
+            }
+        }
+
+        if(!is_ignore){
+            dynarray_push(token_list, t);
+        }
+
+        Token final_token;
+        final_token.word = "";
+        final_token.category = 0;
+
+        dynarray_push(token_list, final_token);
     }
     else{
         printf("\nLexer Compilation Error\n");
@@ -686,14 +693,123 @@ Token* scanner_loop(FA dfa, char* directory){
     return token_list;
 }
 
-FA MakeFA(char *src, bool debug){
+Token* scanner_loop_string(FA dfa, char* src, int* ignore_cats, int amount_ignore){
+    int current_state = dfa.initial_state;
+    int last_acceptable_state = -1;
+
+    char* curr_word = dynarray_create(char);
+
+    Token* token_list = dynarray_create(Token);
+
+    if(src == NULL){
+        return 0;
+    }
+
+    int src_i = 0;
+    while(src[src_i] != '\0'){
+        char c = src[src_i];
+
+        int next_state = DFA_transition_function(dfa, current_state, c);
+    
+        //printf("%c %d\n", c, next_state);
+        
+        if(next_state == -1){
+            if(last_acceptable_state != -1){
+                Token t;
+                char null_token = '\0';
+                dynarray_push(curr_word, null_token);
+                t.word = curr_word;
+                
+                for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+                    if(dfa.acceptable_states[i].state == last_acceptable_state){
+                        t.category = dfa.acceptable_states[i].category;
+                        break;
+                    };
+                }
+
+                //printf("%s, %d\n", t.word, t.category);
+                
+                bool is_ignore = false;
+                for(int i=0;i<amount_ignore;i++){
+                    if(ignore_cats[i]==t.category){
+                        is_ignore = true;
+                    }
+                }
+
+                if(!is_ignore){
+                    dynarray_push(token_list, t);
+                }
+
+                current_state = DFA_transition_function(dfa, dfa.initial_state, c);
+                last_acceptable_state = -1;
+                if(FA_state_is_acceptable(dfa, current_state)){
+                    last_acceptable_state = current_state;
+                }
+                curr_word = dynarray_create(char);
+                dynarray_push(curr_word, c);
+            }
+            else{
+                printf("\nLexer Compilation Error\n");
+                break;
+            }
+        }
+        else{
+            dynarray_push(curr_word, c);
+            current_state = next_state;
+            if(FA_state_is_acceptable(dfa, current_state)){
+                last_acceptable_state = current_state;
+            }
+        }
+        
+        src_i++;
+    }
+
+    if(last_acceptable_state != -1){
+        Token t;
+        char null_token = '\0';
+        dynarray_push(curr_word, null_token);
+        t.word = curr_word;
+        
+        for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+            if(dfa.acceptable_states[i].state == last_acceptable_state){
+                t.category = dfa.acceptable_states[i].category;
+                break;
+            };
+        }
+
+        //printf("\n%s, %d\n", t.word, t.category);
+        bool is_ignore = false;
+        for(int i=0;i<amount_ignore;i++){
+            if(ignore_cats[i]==t.category){
+                is_ignore = true;
+            }
+        }
+
+        if(!is_ignore){
+            dynarray_push(token_list, t);
+        }
+
+        Token final_token;
+        final_token.word = "";
+        final_token.category = 0;
+
+        dynarray_push(token_list, final_token);
+    }
+    else{
+        printf("\nLexer Compilation Error\n");
+    }
+
+    return token_list;
+}
+
+FA MakeFA(char *src, char* out_dir, bool debug){
     if(debug){
         printf("\ninitializing non finite automata...\n");
     }
     FA nfa;
     FA_initialize(&nfa);
     if(debug){
-        printf("\npreprocessign regex...\n");
+        printf("\npreprocessign regex...\n\n");
     }
     char* regex = regex_prep(src);
     Fragment fragment_start = {0, strlen(regex)};
@@ -701,15 +817,15 @@ FA MakeFA(char *src, bool debug){
     if(debug){
         printf("Processsed Regex -> \n");
         printf("%s\n", regex);
-        printf("\ncreating thomson's construction...\n");
+        printf("\ncreating thomson's construction...\n\n");
     }
 
     find_split_point(&nfa, regex, fragment_start, false, true, debug);
 
     if(debug){
-        printf("NFA -> \n");
+        printf("\nNFA -> \n");
         FA_print(nfa);
-        printf("\nsubset creation to definite finite automata...\n");
+        printf("\nsubset creation to definite finite automata...\n\n");
     }
     FA dfa = NtoDFA(nfa);
 
@@ -718,33 +834,15 @@ FA MakeFA(char *src, bool debug){
         FA_print(dfa);
     }
 
+    FILE* out = fopen(out_dir, "w");
+
+    fprintf(out, "--- Post Regex ---\n");
+    fprintf(out, "%s\n", regex);
+    fprintf(out, "\nNFA -> \n");
+    FA_export(nfa, out);
+    fprintf(out, "\nDFA -> \n");
+    FA_export(dfa, out);
+    fclose(out);
+
     return dfa;
-}
-
-// final test ->  "(((ab|abc|a)*(bc|c|cde)*)*((abc|ab|(a|b|c)*)*(de|d|(ab|abc)*)*)|((ab|abc|ababc)*((bc|c|cde)*|(a|b|c)*))*)*"
-
-int main() {
-    printf("Scanner...\n");
-
-    FA nfa;
-    FA_initialize(&nfa);
-    char raw_reg[] = "(if|else|elif|for|while)$03|(int|bool|float|double|string|char|void)$02|(  *)$01";
-    char* regex = regex_prep(raw_reg);
-    Fragment fragment_start = {0, strlen(regex)};
-    find_split_point(&nfa, regex, fragment_start, false, true);
-
-    printf("NFA -> \n");
-    FA_print(nfa);
-
-    FA dfa = NtoDFA(nfa);
-
-    printf("DFA -> \n");
-    FA_print(dfa);
-
-    Token* tokens = scanner_loop(dfa, "languaje.k");
-
-    for(int i = 0;i<dynarray_length(tokens);i++){
-        printf("(%s, %d)\n", tokens[i].word, tokens[i].category);
-    }
-    printf("\nStructs...\n");
 }
