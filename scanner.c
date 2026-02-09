@@ -594,19 +594,13 @@ FA NtoDFA(FA nfa){
             if(d_index != -1){
                 DFA_add_transition(&dfa, i, d_index, alphabet_list[j]);
             }
-
-            //SS_destroy(&(T[i][j]));
         }
-
-        //free(T[i]);
     }
 
     for(int i = 0;i<dynarray_length(T);i++){
-
         for(int j = 0;j<alphabet_length;j++){
             SS_destroy(&(T[i][j]));
         }
-
         free(T[i]);
     }
 

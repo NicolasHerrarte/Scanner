@@ -38,12 +38,12 @@ Token* tokens = scanner_loop_file(dfa, directory, ignore_space, 1);
 
 ## Important Recommendations and Warnings
 
-### ⚠️ Category ID Constraints
+### Category ID Constraints
 When assigning categories to your regex patterns, **always use integer values greater than 0**. 
 
 The internal scanning logic validates matches and identifies acceptable states by checking if `category > 0`. Using `0` or negative values (like `-1`) will cause the engine to ignore those states or treat them as invalid, preventing the scanner from ever returning those tokens.
 
-### ⚖️ Priority and Conflict Resolution
+### Priority and Conflict Resolution
 In cases where two different regex classes (categories) could potentially produce the same token from the same input string, the engine resolves the conflict using a priority-based system:
 
 * **Greater Number = Higher Priority**: If a lexeme matches multiple categories, the category with the **highest integer value** will be assigned to the token.
