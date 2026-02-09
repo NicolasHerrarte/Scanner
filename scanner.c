@@ -516,6 +516,9 @@ FA NtoDFA(FA nfa){
 
     Subset q0 = SS_initialize(len_nfa_states(nfa), &nfa.initial_state, 1);
     e_closure(nfa, &q0);
+
+    //Subset n0 = SS_initialize(len_nfa_states(nfa), &nfa.initial_state, 1);
+    //Subset q0 = e_closure(nfa, n0);
     
     Subset* Q = dynarray_create(Subset);
     Subset** T = dynarray_create(Subset*);
@@ -538,6 +541,7 @@ FA NtoDFA(FA nfa){
 
             Subset t = delta(nfa, q, c);
             e_closure(nfa, &t);
+            //Subset t = e_closure(nfa, delta(nfa, q, c));
 
             q_slot[i] = t;
             //printf("Char %c\n", c);
@@ -591,6 +595,15 @@ FA NtoDFA(FA nfa){
                 DFA_add_transition(&dfa, i, d_index, alphabet_list[j]);
             }
 
+            //SS_destroy(&(T[i][j]));
+        }
+
+        //free(T[i]);
+    }
+
+    for(int i = 0;i<dynarray_length(T);i++){
+
+        for(int j = 0;j<alphabet_length;j++){
             SS_destroy(&(T[i][j]));
         }
 
@@ -865,4 +878,15 @@ FA MakeFA(char *src, char* out_dir, bool debug){
     dynarray_destroy(regex);
 
     return dfa;
+}
+
+int main(){
+    char *num_regex = "([0]|[1-9][0-9]*)$02|text$03|( ( )*)$01"; 
+    FA dfa = MakeFA(num_regex, "debug_log.txt", false);
+
+    char *input_text ="123 text  0 text 10101";
+    int ignore_space[] = {1};
+    Token* tokens = scanner_loop_string(dfa, input_text, ignore_space, 1);
+
+    print_token_seq(tokens);
 }
