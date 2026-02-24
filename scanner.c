@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -610,6 +611,161 @@ FA NtoDFA(FA nfa){
     return dfa;
 }
 
+TableDFA DFAtoTable(FA dfa){
+    unsigned char char_list[256] = {0};
+    int* char_mapping = malloc(256*sizeof(int));
+    int counter = 0;
+    for(int i = 0;i<256;i++){
+        if(dfa.alphabet[i] == true){
+            char_list[counter] = i;
+            char_mapping[i] = counter;
+            counter ++;
+        }
+    }
+
+    int** scanner_table = malloc(sizeof(int*)*counter);
+    for(int i = 0;i<counter;i++){
+        scanner_table[i] = malloc(dynarray_length(dfa.states)* sizeof(int));
+        memset(scanner_table[i], -1, dynarray_length(dfa.states)* sizeof(int));
+    }
+
+    for(int i = 0;i<dynarray_length(dfa.transitions);i++){
+        Transition trans = dfa.transitions[i];
+        scanner_table[char_mapping[trans.trans_char]][trans.state_from] = trans.state_to;
+    }
+    
+    int* acceptable_table = calloc(dynarray_length(dfa.states), sizeof(int));
+    for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
+       acceptable_table[dfa.acceptable_states[i].state] = dfa.acceptable_states[i].category;
+    }
+
+    TableDFA tout;
+    tout.trans_table = scanner_table;
+    tout.acc_states = acceptable_table;
+    tout.char_mapping = char_mapping;
+    tout.num_states = dynarray_length(dfa.states);
+    tout.alphabet_size = counter;
+    return tout;
+}
+
+void saveDFATable(TableDFA tables, char* directory){
+    FILE* f = fopen(directory, "w");
+    assert(f != NULL);
+
+    fprintf(f, "%d,%d,\n\n", tables.num_states, tables.alphabet_size);
+
+    for (int c = 0; c < 256; c++) {
+        for (int col = 0; col < tables.alphabet_size; col++) {
+            if (tables.char_mapping[c] == col) {
+                fprintf(f, "%d,", c);
+            }
+        }
+    }
+
+    fprintf(f, "\n");
+
+    for (int row = 0; row < tables.num_states; row++) {
+        for (int col = 0; col < tables.alphabet_size; col++) {
+            fprintf(f, "%d,", tables.trans_table[col][row]);
+        }
+
+        fprintf(f, "\n");
+    }
+
+    fprintf(f, "\n");
+
+    for (int col = 0; col < tables.num_states; col++) {
+        fprintf(f, "%d,", tables.acc_states[col]);
+    }
+
+    fclose(f);
+}
+
+TableDFA loadDFATable(char* directory){
+    TableDFA tables;
+    FILE* f = fopen(directory, "r");
+    assert(f != NULL);
+
+    fscanf(f, " %d, %d,", &tables.num_states, &tables.alphabet_size);
+
+    printf("%d, %d\n", tables.num_states, tables.alphabet_size);
+
+    int* char_mapping = malloc(256*sizeof(int));
+    int** scanner_table = malloc(sizeof(int*)*tables.alphabet_size);
+    for(int i = 0;i<tables.alphabet_size;i++){
+        scanner_table[i] = malloc(tables.num_states* sizeof(int));
+        memset(scanner_table[i], -1, tables.num_states* sizeof(int));
+    }
+
+    int* acceptable_table = calloc(tables.num_states, sizeof(int));
+
+    for(int i = 0;i<tables.alphabet_size;i++){
+        int c_int;
+        fscanf(f, " %d,", &c_int);
+        char_mapping[c_int] = i;
+    }
+
+    printf("%d, %d, %d\n", char_mapping['a'], char_mapping['b'], char_mapping['c']);
+
+    for(int i = 0;i<tables.num_states;i++){
+        for(int j = 0;j<tables.alphabet_size;j++){
+            fscanf(f, " %d,", &scanner_table[j][i]);
+            //printf("%d (%d, %d)\n", scanner_table[j][i]);
+        }
+    }
+
+    for(int i = 0;i<tables.num_states;i++){
+        fscanf(f, " %d,", &acceptable_table[i]);
+        printf("%d\n", acceptable_table[i]);
+    }
+
+    tables.acc_states = acceptable_table;
+    tables.trans_table = scanner_table;
+    tables.char_mapping = char_mapping;
+
+    return tables;
+}
+
+void destroyDFATable(TableDFA table){
+    free(table.acc_states);
+    free(table.char_mapping);
+    for(int i = 0;i<table.alphabet_size;i++){
+        free(table.trans_table[i]);
+    }
+    free(table.trans_table);
+}
+
+void printTableDFA(TableDFA table) {
+    printf("\n--- DFA TRANSITION TABLE ---\n");
+    
+    printf("State | Acc |");
+    for (int c = 0; c < 256; c++) {
+        for (int col = 0; col < table.alphabet_size; col++) {
+            if (table.char_mapping[c] == col) {
+                if (c > 32 && c < 127) printf("  %c  ", c);
+                else printf(" 0x%02X", c);
+            }
+        }
+    }
+    printf("\n");
+    printf("----------------------------\n");
+
+    for (int s = 0; s < table.num_states; s++) {
+        printf("%5d | %3d |", s, table.acc_states[s]);
+
+        for (int col = 0; col < table.alphabet_size; col++) {
+            int target = table.trans_table[col][s];
+            if (target == -1) {
+                printf("  .  ");
+            } else {
+                printf("%3d  ", target);
+            }
+        }
+        printf("\n");
+    }
+    printf("----------------------------\n");
+}
+
 Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_ignore){
     FILE* file_ptr = fopen(directory, "r");
 
@@ -629,7 +785,7 @@ Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_i
 
         int next_state = DFA_transition_function(dfa, current_state, c);
     
-        //printf("%c %d\n", c, next_state);
+        printf("%c %d\n", c, next_state);
         
         if(next_state == -1){
             if(last_acceptable_state != -1){
@@ -645,7 +801,7 @@ Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_i
                     };
                 }
 
-                //printf("%s, %d\n", t.word, t.category);
+                printf("%s, %d\n", t.word, t.category);
                 bool is_ignore = false;
                 for(int i=0;i<amount_ignore;i++){
                     if(ignore_cats[i]==t.category){
@@ -875,12 +1031,20 @@ FA MakeFA(char *src, char* out_dir, bool debug){
 }
 
 int main(){
-    char *num_regex = "([0]|[1-9][0-9]*)$02|text$03|( ( )*)$01"; 
-    FA dfa = MakeFA(num_regex, "debug_log.txt", false);
+    char *num_regex = "a(b|c)*$01"; 
+    FA dfa = MakeFA(num_regex, "debug_log.txt", true);
+    TableDFA table_construct = DFAtoTable(dfa);
+    FA_destroy(&dfa);
+    printTableDFA(table_construct);
+    saveDFATable(table_construct, "tables/transitions.sc");
+    destroyDFATable(table_construct);
+    TableDFA table_load = loadDFATable("tables/transitions.sc");
+    printTableDFA(table_load);
+    destroyDFATable(table_load);
 
-    char *input_text ="123 text  0 text 10101";
-    int ignore_space[] = {1};
-    Token* tokens = scanner_loop_string(dfa, input_text, ignore_space, 1);
+    //char *input_text ="";
+    //int ignore_space[] = {1};
+    //Token* tokens = scanner_loop_file(dfa, "source_code.txt", ignore_space, 1);
 
-    print_token_seq(tokens);
+    //print_token_seq(tokens);
 }
