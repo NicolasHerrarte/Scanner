@@ -15,6 +15,12 @@
 
 #define len_nfa_states(fa) dynarray_length(fa.states)
 
+typedef struct ScannerState{
+    int input;
+    int fence;
+    char* buffer;
+} ScannerState;
+
 typedef struct TableDFA{
     int** trans_table;
     int* acc_states;
@@ -22,6 +28,11 @@ typedef struct TableDFA{
     int num_states;
     int alphabet_size;
 } TableDFA;
+
+typedef struct ItemLexeme{
+    int state;
+    int pos;
+} ItemLexeme;
 
 typedef struct AcceptableState{
     int state;
