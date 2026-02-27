@@ -15,6 +15,9 @@
 
 #define len_nfa_states(fa) dynarray_length(fa.states)
 
+#define INVALID 0
+#define BAD -1
+
 typedef struct ScannerState{
     int input;
     int fence;

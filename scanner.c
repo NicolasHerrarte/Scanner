@@ -88,18 +88,18 @@ void export_token_seq(Token* tokens, FILE* out){
     }
 }
 
-int FA_initialize(FA *fa){
-    fa->states = dynarray_create(int);
-    fa->transitions = dynarray_create(Transition);
-    fa->acceptable_states = dynarray_create(AcceptableState);
-    memset(fa->alphabet, 0, 256);
-}
-
 int FA_next_state(FA *fa){
     int next_int = dynarray_length(fa->states);
     dynarray_push(fa->states, next_int);
 
     return next_int;
+}
+
+int FA_initialize(FA *fa){
+    fa->states = dynarray_create(int);
+    fa->transitions = dynarray_create(Transition);
+    fa->acceptable_states = dynarray_create(AcceptableState);
+    memset(fa->alphabet, 0, 256);
 }
 
 bool int_dynarray_in(int* arr, int search){
@@ -626,25 +626,25 @@ TableDFA DFAtoTable(FA dfa){
 
     int** scanner_table = malloc(sizeof(int*)*counter);
     for(int i = 0;i<counter;i++){
-        scanner_table[i] = malloc(dynarray_length(dfa.states)* sizeof(int));
-        memset(scanner_table[i], -1, dynarray_length(dfa.states)* sizeof(int));
+        scanner_table[i] = malloc((dynarray_length(dfa.states)+1)* sizeof(int));
+        memset(scanner_table[i], 0, (dynarray_length(dfa.states)+1)* sizeof(int));
     }
 
     for(int i = 0;i<dynarray_length(dfa.transitions);i++){
         Transition trans = dfa.transitions[i];
-        scanner_table[char_mapping[trans.trans_char]][trans.state_from] = trans.state_to;
+        scanner_table[char_mapping[trans.trans_char]][trans.state_from+1] = trans.state_to+1;
     }
     
-    int* acceptable_table = calloc(dynarray_length(dfa.states), sizeof(int));
+    int* acceptable_table = calloc(dynarray_length(dfa.states)+1, sizeof(int));
     for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-       acceptable_table[dfa.acceptable_states[i].state] = dfa.acceptable_states[i].category;
+       acceptable_table[dfa.acceptable_states[i].state+1] = dfa.acceptable_states[i].category;
     }
 
     TableDFA tout;
     tout.trans_table = scanner_table;
     tout.acc_states = acceptable_table;
     tout.char_mapping = char_mapping;
-    tout.num_states = dynarray_length(dfa.states);
+    tout.num_states = dynarray_length(dfa.states)+1;
     tout.alphabet_size = counter;
     return tout;
 }
@@ -696,7 +696,7 @@ TableDFA loadDFATable(char* directory){
     int** scanner_table = malloc(sizeof(int*)*tables.alphabet_size);
     for(int i = 0;i<tables.alphabet_size;i++){
         scanner_table[i] = malloc(tables.num_states* sizeof(int));
-        memset(scanner_table[i], -1, tables.num_states* sizeof(int));
+        memset(scanner_table[i], 0, tables.num_states* sizeof(int));
     }
 
     int* acceptable_table = calloc(tables.num_states, sizeof(int));
@@ -759,7 +759,7 @@ void printTableDFA(TableDFA table) {
 
         for (int col = 0; col < table.alphabet_size; col++) {
             int target = table.trans_table[col][s];
-            if (target == -1) {
+            if (target == 0) {
                 printf("  .  ");
             } else {
                 printf("%3d  ", target);
@@ -770,30 +770,52 @@ void printTableDFA(TableDFA table) {
     printf("----------------------------\n");
 }
 
-int next_word(TableDFA table, FILE* file_ptr, ItemLexeme* stack, bool** failed_table, int* input_pos, ScannerState* sc, int n){
-    int state = 0;
+long stream_len(FILE *stream) {
+    long count = 0;
+    int c;
+
+    while ((c = fgetc(stream)) != EOF) {
+        if (c == '\r') {
+            continue; 
+        }
+        count++;
+    }
+
+    rewind(stream);
+
+    return count;
+}
+
+
+Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_pos, ScannerState* sc, int n){
+    int state = 1;
     char* lexeme = dynarray_create(char);
-    ItemLexeme start = {-1,-1};
+    ItemLexeme* stack = dynarray_create(ItemLexeme);
+
+    ItemLexeme start = {BAD, BAD};
     dynarray_push(stack, start);
 
-    while(state != -1){
+    while(state != INVALID){
         //char c = fgetc(file_ptr);
         //NextChar
         int c = sc->buffer[sc->input];
-        printf("%c\n", c);
+        //printf("Current Char %c\n", c);
+        //printf("Start State %d\n", state);
         sc->input = (sc->input + 1) % (2*n);
         if(sc->input % n == 0){
             for(int i = 0; i < n; i++) {
                 int next_c = getc(file_ptr);
-                sc->buffer[sc->input + i] = (next_c == EOF) ? '\n' : (char) next_c;
+                sc->buffer[sc->input + i] = (next_c == EOF) ? '\0' : (char) next_c;
             }
 
             sc->fence = (sc->input+n) % (2*n);
         }
         //NextChar
-        (*input_pos) ++;
         dynarray_push(lexeme, c);
+
+        printf("POS -> %d\n", *input_pos);
         if(failed_table[state][*input_pos]){
+            printf("Table FUCK UP\n");
             break;
         }
 
@@ -805,76 +827,122 @@ int next_word(TableDFA table, FILE* file_ptr, ItemLexeme* stack, bool** failed_t
 
         dynarray_push(stack, next);
 
+        if(c == '\0'){
+            char garbage;
+            dynarray_pop(lexeme, &garbage);
+            break;
+        }
+
         if(table.char_mapping[c] == -1){
-            printf("Lexing Error\n");
+            printf("Character Not Recognized\n");
             assert(false);
         }
         state = table.trans_table[table.char_mapping[c]][state];
+
+        (*input_pos) ++;
+
+        //printf("End State %d\n", state);
     }
 
-    while(table.acc_states[state] == 0 && state != -1){
-        printf("%d, %d\n", state);
+    for(int i = 0;i<dynarray_length(stack);i++){
+        //break;
+        printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
+    }
+
+    //printf("State -> %d\n", state);
+
+    while(state != BAD && table.acc_states[state] == 0){
+        printf("OMFG %d, %d\n", state, sc->fence);
         failed_table[state][*input_pos] = true;
 
+        //printf("FK %d\n", dynarray_length(stack));
         assert(dynarray_length(stack)>=0);
         ItemLexeme tmp;
         dynarray_pop(stack, &tmp);
         state = tmp.state;
-        printf("%d, %d\n", state);
+        //printf("%d, %d\n", state);
         *input_pos = tmp.pos;
 
         char garbage;
         dynarray_pop(lexeme, &garbage);
         //Rollback()
         if(sc->input == sc->fence){
-            printf("Rollback error");
+            printf("Rollback error %c\n", garbage);
             assert(false);
         }
         sc->input = (sc->input - 1 + (2 * n)) % (2 * n);
+        //Rollback()
     }
 
-    if(table.acc_states[state] > 0){
+    dynarray_destroy(stack);
+
+    printf("DONE LOOP\n");
+
+    printf("state -> %d\n", state);
+    if(state != BAD && table.acc_states[state] > 0){
+        //printf("%d\n", dynarray_length(lexeme));
         char null_char = '\0';
         dynarray_push(lexeme, null_char);
-        printf("%s", lexeme);
-        return table.acc_states[state];
+        //printf("%s -> %d\n", lexeme, state);
+
+        Token next_token = {lexeme, table.acc_states[state]};
+        return next_token;
     }
     else{
-        printf("Lexing Error");
+        printf("Lexing Error\n");
         assert(false);
     }
 }
 
-void file_scan(TableDFA table, char* directory, int buffer_size){
+Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore){
     FILE* file_ptr = fopen(directory, "r");
+    Token* token_list = dynarray_create(Token);
 
     ScannerState sc_state;
     sc_state.fence = 0;
     sc_state.input = 0;
     sc_state.buffer = malloc(buffer_size * 2 * sizeof(char));
 
-    for(int i = 0; i < n; i++){
+    for(int i = 0; i < buffer_size; i++){
         int next_c = getc(file_ptr);
-        sc_state.buffer->buffer[i] = (next_c == EOF) ? '\n' : (char) next_c;
+        sc_state.buffer[i] = (next_c == EOF) ? '\0' : (char) next_c;
     }
 
-    ItemLexeme* stack = dynarray_create(ItemLexeme);
-    fseek(file_ptr, 0, SEEK_END);
-    long file_size = ftell(file_ptr);
-    int input_pos = 0;
     rewind(file_ptr);
+    long file_size = stream_len(file_ptr)+2;
+    int input_pos = 0;
+    
     bool** failed_table = malloc(table.num_states*sizeof(bool*));
     for(int i = 0;i<table.num_states;i++){
         failed_table[i] = calloc(file_size, sizeof(bool));
     }
-    int cat = next_word(table, file_ptr, stack, failed_table, input_pos, &sc_state, buffer_size);
+    printf("SIZE --- %d\n", file_size);
+
+    while(input_pos < file_size-2){
+        Token token = next_word(table, file_ptr, failed_table, &input_pos, &sc_state, buffer_size);
+        printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
+        bool is_ignore = false;
+        for(int i=0;i<amount_ignore;i++){
+            if(ignore_cats[i]==token.category){
+                is_ignore = true;
+            }
+        }
+
+        if(!is_ignore){
+            dynarray_push(token_list, token);
+        }
+    }
+
+    print_token_seq(token_list);
+    //printf("input: %d, state: %d, fence: %d\n", input_pos, sc_state.input, sc_state.fence);
     for(int i = 0;i<table.num_states;i++){
         free(failed_table[i]);
     }
     free(failed_table);
     free(sc_state.buffer);
-    dynarray_destroy(stack);
     fclose(file_ptr);
+
+    return token_list;
 }
 
 Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_ignore){
@@ -1142,16 +1210,19 @@ FA MakeFA(char *src, char* out_dir, bool debug){
 }
 
 int main(){
-    char *num_regex = "a(b|c)*$01"; 
-    FA dfa = MakeFA(num_regex, "debug_log.txt", true);
-    TableDFA table_construct = DFAtoTable(dfa);
-    FA_destroy(&dfa);
-    printTableDFA(table_construct);
-    saveDFATable(table_construct, "tables/transitions.sc");
-    destroyDFATable(table_construct);
+    char *num_regex = "(=?)$20|(>=)$21|(<=)$22|(>)$23|(<)$24|+$07|-$08|/*$09|//$10|/($11|/)$12|/[$16|/]$17|.$18|,$19|(0|[1-9][0-9]*)$13|((0|[1-9][0-9]*).[0-9][0-9]*)f$14|(\"([a-zA-Z0-9_][a-zA-Z0-9_]*)\")$25|(true)$26|(false)$27|(if)$33|(else)$34|(while)$35|(for)$36|(Init)$37|(Proc)$38|(return)$39|({)$40|(})$41|(;)$42|(<-)$43|(=)$44|(:)$45|(->)$46|(int)$47|(bool)$48|(float)$49|(break)$50|(continue)$51|(goto)$52|([a-zA-Z_][a-zA-Z0-9_]*)$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
+    //FA dfa = MakeFA(num_regex, "debug_log.txt", true);
+    //TableDFA table_construct = DFAtoTable(dfa);
+    //FA_destroy(&dfa);
+    //printTableDFA(table_construct);
+    //saveDFATable(table_construct, "tables/transitions.sc");
+    //destroyDFATable(table_construct);
     TableDFA table_load = loadDFATable("tables/transitions.sc");
-    printTableDFA(table_load);
-    file_scan(table_load, "languaje.k", 128);
+    //printTableDFA(table_load);
+
+    int ignore_cats[] = {1};
+
+    file_scan(table_load, "languaje.k", 128, ignore_cats, 1);
     destroyDFATable(table_load);
 
     //char *input_text ="";
