@@ -813,7 +813,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         //NextChar
         dynarray_push(lexeme, c);
 
-        printf("POS -> %d\n", *input_pos);
+        //printf("POS -> %d\n", *input_pos);
         if(failed_table[state][*input_pos]){
             printf("Table FUCK UP\n");
             break;
@@ -844,15 +844,15 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         //printf("End State %d\n", state);
     }
 
-    for(int i = 0;i<dynarray_length(stack);i++){
+    //for(int i = 0;i<dynarray_length(stack);i++){
         //break;
-        printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
-    }
+        //printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
+    //}
 
     //printf("State -> %d\n", state);
 
     while(state != BAD && table.acc_states[state] == 0){
-        printf("OMFG %d, %d\n", state, sc->fence);
+        //printf("OMFG %d, %d\n", state, sc->fence);
         failed_table[state][*input_pos] = true;
 
         //printf("FK %d\n", dynarray_length(stack));
@@ -876,7 +876,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 
     dynarray_destroy(stack);
 
-    printf("DONE LOOP\n");
+    //printf("DONE LOOP\n");
 
     printf("state -> %d\n", state);
     if(state != BAD && table.acc_states[state] > 0){
@@ -916,11 +916,11 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
     for(int i = 0;i<table.num_states;i++){
         failed_table[i] = calloc(file_size, sizeof(bool));
     }
-    printf("SIZE --- %d\n", file_size);
+    //printf("SIZE --- %d\n", file_size);
 
     while(input_pos < file_size-2){
         Token token = next_word(table, file_ptr, failed_table, &input_pos, &sc_state, buffer_size);
-        printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
+        //printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
         bool is_ignore = false;
         for(int i=0;i<amount_ignore;i++){
             if(ignore_cats[i]==token.category){
@@ -945,223 +945,7 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
     return token_list;
 }
 
-Token* scanner_loop_file(FA dfa, char* directory, int* ignore_cats, int amount_ignore){
-    FILE* file_ptr = fopen(directory, "r");
-
-    int current_state = dfa.initial_state;
-    int last_acceptable_state = -1;
-
-    char* curr_word = dynarray_create(char);
-
-    Token* token_list = dynarray_create(Token);
-
-    assert(file_ptr != NULL);
-
-    int c_int;
-    while((c_int = fgetc(file_ptr)) != EOF){
-
-        char c = (char) c_int;
-
-        int next_state = DFA_transition_function(dfa, current_state, c);
-    
-        printf("%c %d\n", c, next_state);
-        
-        if(next_state == -1){
-            if(last_acceptable_state != -1){
-                Token t;
-                char null_token = '\0';
-                dynarray_push(curr_word, null_token);
-                t.word = curr_word;
-                
-                for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-                    if(dfa.acceptable_states[i].state == last_acceptable_state){
-                        t.category = dfa.acceptable_states[i].category;
-                        break;
-                    };
-                }
-
-                printf("%s, %d\n", t.word, t.category);
-                bool is_ignore = false;
-                for(int i=0;i<amount_ignore;i++){
-                    if(ignore_cats[i]==t.category){
-                        is_ignore = true;
-                    }
-                }
-
-                if(!is_ignore){
-                    dynarray_push(token_list, t);
-                }
-
-                current_state = DFA_transition_function(dfa, dfa.initial_state, c);
-                last_acceptable_state = -1;
-                if(FA_state_is_acceptable(dfa, current_state)){
-                    last_acceptable_state = current_state;
-                }
-                curr_word = dynarray_create(char);
-                dynarray_push(curr_word, c);
-            }
-            else{
-                printf("\nLexer Compilation Error\n");
-                break;
-            }
-        }
-        else{
-            dynarray_push(curr_word, c);
-            current_state = next_state;
-            if(FA_state_is_acceptable(dfa, current_state)){
-                last_acceptable_state = current_state;
-            }
-        }
-         
-    }
-
-    if(last_acceptable_state != -1){
-        Token t;
-        char null_token = '\0';
-        dynarray_push(curr_word, null_token);
-        t.word = curr_word;
-        
-        for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-            if(dfa.acceptable_states[i].state == last_acceptable_state){
-                t.category = dfa.acceptable_states[i].category;
-                break;
-            };
-        }
-
-        bool is_ignore = false;
-        for(int i=0;i<amount_ignore;i++){
-            if(ignore_cats[i]==t.category){
-                is_ignore = true;
-            }
-        }
-
-        if(!is_ignore){
-            dynarray_push(token_list, t);
-        }
-
-        Token final_token;
-        final_token.word = "";
-        final_token.category = 0;
-
-        dynarray_push(token_list, final_token);
-    }
-    else{
-        printf("\nLexer Compilation Error\n");
-    }
-
-    return token_list;
-}
-
-Token* scanner_loop_string(FA dfa, char* src, int* ignore_cats, int amount_ignore){
-    int current_state = dfa.initial_state;
-    int last_acceptable_state = -1;
-
-    char* curr_word = dynarray_create(char);
-
-    Token* token_list = dynarray_create(Token);
-
-    if(src == NULL){
-        return 0;
-    }
-
-    int src_i = 0;
-    while(src[src_i] != '\0'){
-        char c = src[src_i];
-
-        int next_state = DFA_transition_function(dfa, current_state, c);
-    
-        //printf("%c %d\n", c, next_state);
-        
-        if(next_state == -1){
-            if(last_acceptable_state != -1){
-                Token t;
-                char null_token = '\0';
-                dynarray_push(curr_word, null_token);
-                t.word = curr_word;
-                
-                for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-                    if(dfa.acceptable_states[i].state == last_acceptable_state){
-                        t.category = dfa.acceptable_states[i].category;
-                        break;
-                    };
-                }
-
-                //printf("%s, %d\n", t.word, t.category);
-                
-                bool is_ignore = false;
-                for(int i=0;i<amount_ignore;i++){
-                    if(ignore_cats[i]==t.category){
-                        is_ignore = true;
-                    }
-                }
-
-                if(!is_ignore){
-                    dynarray_push(token_list, t);
-                }
-
-                current_state = DFA_transition_function(dfa, dfa.initial_state, c);
-                last_acceptable_state = -1;
-                if(FA_state_is_acceptable(dfa, current_state)){
-                    last_acceptable_state = current_state;
-                }
-                curr_word = dynarray_create(char);
-                dynarray_push(curr_word, c);
-            }
-            else{
-                printf("\nLexer Compilation Error\n");
-                break;
-            }
-        }
-        else{
-            dynarray_push(curr_word, c);
-            current_state = next_state;
-            if(FA_state_is_acceptable(dfa, current_state)){
-                last_acceptable_state = current_state;
-            }
-        }
-        
-        src_i++;
-    }
-
-    if(last_acceptable_state != -1){
-        Token t;
-        char null_token = '\0';
-        dynarray_push(curr_word, null_token);
-        t.word = curr_word;
-        
-        for(int i = 0;i<dynarray_length(dfa.acceptable_states);i++){
-            if(dfa.acceptable_states[i].state == last_acceptable_state){
-                t.category = dfa.acceptable_states[i].category;
-                break;
-            };
-        }
-
-        //printf("\n%s, %d\n", t.word, t.category);
-        bool is_ignore = false;
-        for(int i=0;i<amount_ignore;i++){
-            if(ignore_cats[i]==t.category){
-                is_ignore = true;
-            }
-        }
-
-        if(!is_ignore){
-            dynarray_push(token_list, t);
-        }
-
-        Token final_token;
-        final_token.word = "";
-        final_token.category = 0;
-
-        dynarray_push(token_list, final_token);
-    }
-    else{
-        printf("\nLexer Compilation Error\n");
-    }
-
-    return token_list;
-}
-
-FA MakeFA(char *src, char* out_dir, bool debug){
+TableDFA make_tables(char *src, char* out_dir, char* save_dir, bool debug){
     if(debug){
         printf("\ninitializing non finite automata...\n");
     }
@@ -1206,19 +990,26 @@ FA MakeFA(char *src, char* out_dir, bool debug){
     FA_destroy(&nfa);
     dynarray_destroy(regex);
 
-    return dfa;
+    TableDFA table_construct = DFAtoTable(dfa);
+    FA_destroy(&dfa);
+    saveDFATable(table_construct, save_dir);
+
+    return table_construct;
 }
 
 int main(){
     char *num_regex = "(=?)$20|(>=)$21|(<=)$22|(>)$23|(<)$24|+$07|-$08|/*$09|//$10|/($11|/)$12|/[$16|/]$17|.$18|,$19|(0|[1-9][0-9]*)$13|((0|[1-9][0-9]*).[0-9][0-9]*)f$14|(\"([a-zA-Z0-9_][a-zA-Z0-9_]*)\")$25|(true)$26|(false)$27|(if)$33|(else)$34|(while)$35|(for)$36|(Init)$37|(Proc)$38|(return)$39|({)$40|(})$41|(;)$42|(<-)$43|(=)$44|(:)$45|(->)$46|(int)$47|(bool)$48|(float)$49|(break)$50|(continue)$51|(goto)$52|([a-zA-Z_][a-zA-Z0-9_]*)$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
-    //FA dfa = MakeFA(num_regex, "debug_log.txt", true);
+
     //TableDFA table_construct = DFAtoTable(dfa);
     //FA_destroy(&dfa);
     //printTableDFA(table_construct);
     //saveDFATable(table_construct, "tables/transitions.sc");
     //destroyDFATable(table_construct);
-    TableDFA table_load = loadDFATable("tables/transitions.sc");
     //printTableDFA(table_load);
+
+    //TableDFA garbage = make_tables(num_regex, "debug_log.txt", "tables/transitions.sc", true);
+    //destroyDFATable(garbage);
+    TableDFA table_load = loadDFATable("tables/transitions.sc");
 
     int ignore_cats[] = {1};
 
