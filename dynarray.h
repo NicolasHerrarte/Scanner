@@ -19,6 +19,7 @@ enum {
 };
 
 void *_dynarray_create(size_t length, size_t stride);
+void *_dynarray_copy(void* arr);
 void _dynarray_destroy(void *arr);
 
 size_t _dynarray_field_get(void *arr, size_t field);
@@ -28,6 +29,7 @@ void *_dynarray_resize(void *arr);
 
 void *_dynarray_push(void *arr, void *xptr);
 void *_dynarray_pushleft(void *arr, void *xptr);
+void _dynarray_replace(void *arr, void *xptr, int index);
 void _dynarray_pop(void *arr, void *dest);
 void _dynarray_reset(void *arr);
 
@@ -36,10 +38,14 @@ void _dynarray_reset(void *arr);
 
 #define dynarray_create(type) _dynarray_create(DYNARRAY_DEFAULT_CAP, sizeof(type))
 #define dynarray_create_prealloc(type, capacity) _dynarray_create(capacity, sizeof(type))
+#define dynarray_copy(arr) _dynarray_copy(arr)
 #define dynarray_destroy(arr) _dynarray_destroy(arr)
 
 #define dynarray_push(arr, x) arr = _dynarray_push(arr, &x)
 #define dynarray_pushleft(arr, x) arr = _dynarray_pushleft(arr, &x)
+#define dynarray_replace(arr, x, ind) _dynarray_replace(arr, &x, int index)
+#define dynarray_get_last(arr) arr[dynarray_length(arr)-1]
+
 #define dynarray_push_rval(arr, x) \
     do { \
         __auto_type temp = x; \

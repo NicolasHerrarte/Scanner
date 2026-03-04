@@ -689,7 +689,7 @@ TableDFA loadDFATable(char* directory){
 
     fscanf(f, " %d, %d,", &tables.num_states, &tables.alphabet_size);
 
-    printf("%d, %d\n", tables.num_states, tables.alphabet_size);
+    //printf("%d, %d\n", tables.num_states, tables.alphabet_size);
 
     int* char_mapping = malloc(256*sizeof(int));
     memset(char_mapping, -1, 256*sizeof(int));
@@ -707,7 +707,7 @@ TableDFA loadDFATable(char* directory){
         char_mapping[c_int] = i;
     }
 
-    printf("%d, %d, %d\n", char_mapping['a'], char_mapping['b'], char_mapping['c']);
+    //printf("%d, %d, %d\n", char_mapping['a'], char_mapping['b'], char_mapping['c']);
 
     for(int i = 0;i<tables.num_states;i++){
         for(int j = 0;j<tables.alphabet_size;j++){
@@ -718,7 +718,7 @@ TableDFA loadDFATable(char* directory){
 
     for(int i = 0;i<tables.num_states;i++){
         fscanf(f, " %d,", &acceptable_table[i]);
-        printf("%d\n", acceptable_table[i]);
+        //printf("%d\n", acceptable_table[i]);
     }
 
     fclose(f);
@@ -878,7 +878,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 
     //printf("DONE LOOP\n");
 
-    printf("state -> %d\n", state);
+    //printf("state -> %d\n", state);
     if(state != BAD && table.acc_states[state] > 0){
         //printf("%d\n", dynarray_length(lexeme));
         char null_char = '\0';
@@ -933,7 +933,12 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
         }
     }
 
-    print_token_seq(token_list);
+    Token final_token;
+    final_token.category = 0;
+    final_token.word = "EOF";
+    
+    dynarray_push(token_list, final_token);
+    //print_token_seq(token_list);
     //printf("input: %d, state: %d, fence: %d\n", input_pos, sc_state.input, sc_state.fence);
     for(int i = 0;i<table.num_states;i++){
         free(failed_table[i]);
@@ -1013,7 +1018,8 @@ int main(){
 
     int ignore_cats[] = {1};
 
-    file_scan(table_load, "languaje.k", 128, ignore_cats, 1);
+    Token* token_list = file_scan(table_load, "languaje.k", 128, ignore_cats, 1);
+    print_token_seq(token_list);
     destroyDFATable(table_load);
 
     //char *input_text ="";

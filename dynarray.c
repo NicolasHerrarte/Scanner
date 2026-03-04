@@ -1,4 +1,5 @@
 #include "dynarray.h"
+#include <assert.h>
 
 /*
 
@@ -27,6 +28,16 @@ void *_dynarray_create(size_t init_cap, size_t stride)
     arr[LENGTH] = 0;
     arr[STRIDE] = stride;
     return (void *) (arr + DYNARRAY_FIELDS);
+}
+
+void *_dynarray_copy(void* arr)
+{
+    size_t header_size = DYNARRAY_FIELDS * sizeof(size_t);
+    size_t arr_size = dynarray_stride(arr) * dynarray_length(arr);
+    size_t *new_arr = (size_t *) malloc(header_size + arr_size);
+    memcpy(new_arr, (size_t*) arr - DYNARRAY_FIELDS, header_size + arr_size);
+
+    return (void *) (new_arr + DYNARRAY_FIELDS);
 }
 
 void _dynarray_destroy(void *arr)
@@ -80,6 +91,13 @@ void *_dynarray_pushleft(void *arr, void *xptr)
     memcpy(arr, xptr, dynarray_stride(arr));
     _dynarray_field_set(arr, LENGTH, dynarray_length(arr) + 1);
     return arr;
+}
+
+void _dynarray_replace(void *arr, void *xptr, int index)
+{
+    assert(index < dynarray_length(arr));
+    assert(index >= 0);
+    memcpy(arr + index * dynarray_stride(arr), xptr, dynarray_stride(arr));
 }
 
 // Removes the last element in the array, but copies it to `*dest` first.
