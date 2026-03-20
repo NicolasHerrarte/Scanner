@@ -1,5 +1,100 @@
-for (Init int i <- 0; i < max; i = i + 1) {
-    if (registry.get_user(i).is_active =? true) {
-        log_activity("User_" + i - 1.578f, true);
-    }
-}
+Goal            /-> Program                                     /%%/ @sh -$0 /;
+
+Program         /-> CompStat                                    /%%/ @sh -$0 /;
+
+Block           /-> { CompStat }                                /%%/ -sh -$1 /;
+
+CompStat        /-> UnitStat                                    /%%/ @mn -$0 <StatList> /;
+/|              /-> CompStat UnitStat                           /%%/ @ap -$0 -$1 /;
+
+UnitStat        /-> Stat ;                                      /%%/ @sh -$0 /;
+/|              /-> ControlStat                                 /%%/ @sh -$0 /;
+/|              /-> Jump ;                                      /%%/ @sh -$0 /;
+
+ControlStat     /-> CondStat                                    /%%/ @sh -$0 /;
+/|              /-> LoopStat                                    /%%/ @sh -$0 /;
+/|              /-> ProcDeclaration                             /%%/ @sh -$0 /;
+
+Stat            /-> Declaration                                 /%%/ @sh -$0 /;
+/|              /-> Assignment                                  /%%/ @sh -$0 /;
+/|              /-> Expr                                        /%%/ @sh -$0 /;
+
+CondStat        /-> if ( Expr ) Block                           /%%/ @mn -$2 -$4 <IfNode> /;
+/|              /-> if ( Expr ) Block else CondStat             /%%/ @mn -$2 -$4 -$6 <IfNode> /;
+/|              /-> if ( Expr ) Block else Block                /%%/ @mn -$2 -$4 <IfNode> /;
+
+LoopStat        /-> While                                       /%%/ -sh -$0 /;
+/|              /-> For                                         /%%/ -sh -$0 /;
+
+While           /-> while ( Expr ) Block                        /%%/ @mn -$2 -$4 <WhileNode> /;
+
+For             /-> for ( Stat ; Expr ; Stat ) Block            /%%/ @mn -$2 -$4 -$6 -$8 <ForNode> /;
+
+Declaration     /-> Init VarType Identifier                     /%%/ @mn -$1 -$2 <VarDecl> /;
+/|              /-> Init VarType Identifier <- Expr             /%%/ @mn -$1 -$2 -$4 <VarDecl> /;
+
+ProcDeclaration /-> Proc Identifier ( Params ) -> VarType Block /%%/ @mn -$1 -$3 -$6 -$7 <FuncDecl> /;
+
+Assignment      /-> Access = Expr                               /%%/ @mn -$0 -$2 <VarAssign> /;
+
+VarType         /-> Primitive                                   /%%/ @sh -$0 /;
+/|              /-> VarType [ ]                                 /%%/ @mn -$0 -$2 <ArrType> /;
+
+Primitive       /-> int                                         /%%/ @vl <INT> /;
+/|              /-> bool                                        /%%/ @vl <BOOL> /;
+/|              /-> float                                       /%%/ @vl <FLOAT> /;
+/|              /-> string                                      /%%/ @vl <STRING> /;
+
+Jump            /-> break                                       /%%/ @mn -# <Break> /;
+/|              /-> continue                                    /%%/ @mn -# <Continue> /;
+/|              /-> return                                      /%%/ @mn -# <Return> /;
+/|              /-> return Expr                                 /%%/ @mn -$1 <Return> /;
+/|              /-> goto Expr                                   /%%/ @mn -$1 <Goto> /;
+
+Args            /-> ArgList                                     /%%/ @sh -$0 /;
+/|              /-> Epsilon                                     /%%/ @mn -# <Arguments> /;
+
+ArgList         /-> ArgList , Expr                              /%%/ @ap -$0 -$2 /;
+/|              /-> Expr                                        /%%/ @mn -$0 <Arguments> /;
+
+Params          /-> ParamsList                                  /%%/ @sh -$0 /;
+/|              /-> Epsilon                                     /%%/ @mn -# <Parameters> /;
+
+ParamsList      /-> ParamsList , SingleParam                    /%%/ @ap -$0 -$2 /;
+/|              /-> SingleParam                                 /%%/ @mn -$0 <Parameters> /;
+
+SingleParam     /-> Identifier : VarType                        /%%/ @mn -$0 -$2 <UniParam> /;
+
+Expr            /-> Expr LoP Eval                               /%%/ @mn -$0 -$1 -$2 <Expression> /;
+/|              /-> Eval                                        /%%/ @sh -$0 /;
+
+Eval            /-> Eval + Term                                 /%%/ @mn -$0 -$2 <Sum> /;
+/|              /-> Eval - Term                                 /%%/ @mn -$0 -$2 <Subtract> /;
+/|              /-> Term                                        /%%/ @sh -$0 /;
+
+Term            /-> Term * Factor                               /%%/ @mn -$0 -$2 <Mult> /;
+/|              /-> Term / Factor                               /%%/ @mn -$0 -$2 <Division> /;
+/|              /-> Factor                                      /%%/ @sh -$0 /;
+
+Factor          /-> Access                                      /%%/ @sh -$0 /;
+/|              /-> integer                                     /%%/ @bx <INTEGER_BOX> /;
+/|              /-> floating                                    /%%/ @bx <FLOATING_BOX> /;
+/|              /-> litstring                                   /%%/ @bx <LITSTRING_BOX> /;
+/|              /-> true                                        /%%/ @bx <TRUE_BOX> /;
+/|              /-> false                                       /%%/ @bx <FALSE_BOX> /;
+
+Access          /-> Access [ Expr ]                             /%%/ @mn -$0 -$2 <ArrAccess> /;
+/|              /-> Access ( Args )                             /%%/ @mn -$0 -$2 <FuncCall> /;
+/|              /-> Access . Identifier                         /%%/ @mn -$0 -$2 <PropertyAccess> /;
+/|              /-> AccessBase                                  /%%/ @sh -$0 /;
+
+AccessBase      /-> Identifier                                  /%%/ @sh -$0 /;
+/|              /-> ( Expr )                                    /%%/ @sh -$1 /;
+
+Identifier      /-> name                                        /%%/ @bx <IDENTIFIER_BOX> /;
+
+LoP             /-> =?                                          /%%/ @vl <EQUAL_COMP> /;
+/|              /-> >=                                          /%%/ @vl <GREATER_EQUAL> /;
+/|              /-> <=                                          /%%/ @vl <SMALLER_EQUAL> /;
+/|              /-> >                                           /%%/ @vl <GREATER> /;
+/|              /-> <                                           /%%/ @vl <SMALLER> /;
