@@ -111,6 +111,8 @@ void saveDFATable(TableDFA tables, char* directory);
 TableDFA loadDFATable(char* directory);
 void destroyDFATable(TableDFA table);
 long stream_len(FILE *stream);
+
+void export_buffer(char* buffer, int input, int fence, int n, FILE* out);
 Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_pos, ScannerState* sc, int n);
 Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore, char* debug_directory);
 
