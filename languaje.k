@@ -2,7 +2,7 @@ Goal            /-> Program                                     /%%/ @sh -$0 /;
 
 Program         /-> CompStat                                    /%%/ @sh -$0 /;
 
-Block           /-> { CompStat }                                /%%/ -sh -$1 /;
+Block           /-> { CompStat }                                /%%/ @sh -$1 /;
 
 CompStat        /-> UnitStat                                    /%%/ @mn -$0 <StatList> /;
 /|              /-> CompStat UnitStat                           /%%/ @ap -$0 -$1 /;
@@ -23,8 +23,8 @@ CondStat        /-> if ( Expr ) Block                           /%%/ @mn -$2 -$4
 /|              /-> if ( Expr ) Block else CondStat             /%%/ @mn -$2 -$4 -$6 <IfNode> /;
 /|              /-> if ( Expr ) Block else Block                /%%/ @mn -$2 -$4 <IfNode> /;
 
-LoopStat        /-> While                                       /%%/ -sh -$0 /;
-/|              /-> For                                         /%%/ -sh -$0 /;
+LoopStat        /-> While                                       /%%/ @sh -$0 /;
+/|              /-> For                                         /%%/ @sh -$0 /;
 
 While           /-> while ( Expr ) Block                        /%%/ @mn -$2 -$4 <WhileNode> /;
 

@@ -179,10 +179,10 @@ Transition DFA_add_transition(FA *dfa, int _from, int _to, char _trans_char){
     }
     dynarray_push(dfa->transitions, trans);
 
-    if(_trans_char != EPSILON){
-        int int_repr = (unsigned char) _trans_char;
-        dfa->alphabet[int_repr] = 1;
-    }
+    //if(_trans_char != EPSILON){
+        //int int_repr = (unsigned char) _trans_char;
+        //dfa->alphabet[int_repr] = 1;
+    //}
 
     return trans;
 }
@@ -858,12 +858,19 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         //char c = fgetc(file_ptr);
         //NextChar
         int c = sc->buffer[sc->input];
+        //printf("c-> %c\n", c);
+        //printf("s-> %d\n", state);
 
         sc->input = (sc->input + 1) % (2*n);
+
         if(sc->input % n == 0 && !sc->rollback){
+            //printf("RESTACK\n");
+            //printf("Input %d\n", sc->input);
+            bool buffer_file_end = false;
             tmp_rollback = true;
             for(int i = 0; i < n; i++) {
-                int next_c = getc(file_ptr);
+                int next_c = buffer_file_end ? EOF : getc(file_ptr);
+                if(next_c == EOF) buffer_file_end = true;
                 sc->buffer[sc->input + i] = (next_c == EOF) ? '\0' : (char) next_c;
             }
             //printf("%d\n",sc->input);
@@ -897,6 +904,8 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
             printf("Character Not Recognized %c\n", c);
             assert(false);
         }
+
+        //printf("ALV %c\n", c);
         state = table.trans_table[table.char_mapping[c]][state];
 
         (*input_pos) ++;
@@ -906,10 +915,14 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 
     sc->rollback = tmp_rollback;
 
-    //for(int i = 0;i<dynarray_length(stack);i++){
-        //break;
-        //printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
-    //}
+    //printf("POS -> %d\n", *input_pos);
+    if(true){
+        for(int i = 0;i<dynarray_length(stack);i++){
+            break;
+            //printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
+        }
+    }
+    
 
     //printf("State -> %d\n", state);
 
@@ -949,10 +962,13 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         //printf("%s -> %d\n", lexeme, state);
 
         Token next_token = {lexeme, table.acc_states[state]};
+        //printf("lexeme -> %s\n", lexeme);
         return next_token;
     }
     else{
-        printf("Lexing Error\n");
+        char null_char = '\0';
+        dynarray_push(lexeme, null_char);
+        printf("Lexing Error with word %s\n", lexeme);
         assert(false);
     }
 }
@@ -967,6 +983,8 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
     sc_state.buffer = malloc(buffer_size * 2 * sizeof(char));
     sc_state.rollback = false;
 
+    long file_size = stream_len(file_ptr)+2;
+
     FILE* debug_out = fopen(debug_directory, "w");
     export_buffer(sc_state.buffer, sc_state.input, sc_state.fence, buffer_size, debug_out);
 
@@ -977,18 +995,19 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
 
     export_buffer(sc_state.buffer, sc_state.input, sc_state.fence, buffer_size, debug_out);
 
-    rewind(file_ptr);
-    long file_size = stream_len(file_ptr)+2;
     int input_pos = 0;
     
     bool** failed_table = malloc(table.num_states*sizeof(bool*));
     for(int i = 0;i<table.num_states;i++){
         failed_table[i] = calloc(file_size, sizeof(bool));
     }
+
     //printf("SIZE --- %d\n", file_size);
 
     while(input_pos < file_size-2){
         Token token = next_word(table, file_ptr, failed_table, &input_pos, &sc_state, buffer_size);
+
+        //printf("Marker -> %d, Position -> %d\n", marker, input_pos);
         export_buffer(sc_state.buffer, sc_state.input, sc_state.fence, buffer_size, debug_out);
         
         //printf("%d\n", strlen(token.word));
@@ -1081,8 +1100,10 @@ TableDFA make_tables(char *src, char* out_dir, char* save_dir, bool debug){
 
 int main(){
 
-    char *num_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$05|(@sh)$06|(@ap)$07|(@mn)$08|(@bx)$09|(@vl)$10|(-/$(0|[1-9][0-9]*))$11|(-#)$12|((<([a-zA-Z_])([a-zA-Z_])*)>)$13|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
+    char *num_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$06|(@sh)$07|(@ap)$08|(@mn)$09|(@bx)$10|(@vl)$11|(-/$(0|[1-9][0-9]*))$12|(-#)$13|((<([a-zA-Z_])([a-zA-Z_])*)>)$14|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
     //char *num_regex = "-/$$10";
+
+
 
     //TableDFA table_construct = DFAtoTable(dfa);
     //FA_destroy(&dfa);
@@ -1092,13 +1113,10 @@ int main(){
     //printTableDFA(table_load);
 
     //TableDFA garbage = make_tables(num_regex, "debug_log.txt", "tables/transitions.sc", true);
-    
-
     //destroyDFATable(garbage);
     TableDFA table_load = loadDFATable("tables/transitions.sc");
 
     int ignore_cats[] = {1};
-
     Token* token_list = file_scan(table_load, "languaje.k", 128, ignore_cats, 1, "muncher.txt");
     print_token_seq(token_list);
     destroyDFATable(table_load);

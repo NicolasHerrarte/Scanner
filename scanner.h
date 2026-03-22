@@ -11,7 +11,7 @@
 #define FIN_PRIORITY 3
 #define MAX_PRIORITY 4
 
-#define EPSILON '@'
+#define EPSILON '\x01'
 
 #define len_nfa_states(fa) dynarray_length(fa.states)
 
