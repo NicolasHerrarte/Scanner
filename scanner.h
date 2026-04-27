@@ -117,4 +117,5 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore, char* debug_directory);
 
 TableDFA make_tables(char *src, char* out_dir, char* save_dir, bool debug);
+void destroy_token_sequence(Token* sequence);
 

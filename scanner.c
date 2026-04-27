@@ -860,6 +860,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         int c = sc->buffer[sc->input];
         //printf("c-> %c\n", c);
         //printf("s-> %d\n", state);
+        //printf("l-> %d\n", dynarray_length(lexeme));
 
         sc->input = (sc->input + 1) % (2*n);
 
@@ -918,8 +919,8 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
     //printf("POS -> %d\n", *input_pos);
     if(true){
         for(int i = 0;i<dynarray_length(stack);i++){
-            break;
-            //printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
+            //break;
+            printf("Stack: %d Pos: %d\n", stack[i].state, stack[i].pos);
         }
     }
     
@@ -928,6 +929,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 
     while(state != BAD && table.acc_states[state] == 0){
         //printf("OMFG %d, %d\n", state, sc->fence);
+        printf("l-> %d\n", dynarray_length(lexeme));
         failed_table[state][*input_pos] = true;
 
         //printf("FK %d\n", dynarray_length(stack));
@@ -938,11 +940,13 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
         //printf("%d, %d\n", state);
         *input_pos = tmp.pos;
 
-        char garbage;
-        dynarray_pop(lexeme, &garbage);
+        if(dynarray_length(lexeme) > 0){
+            char garbage;
+            dynarray_pop(lexeme, &garbage);
+        }
         //Rollback()
         if(sc->input == sc->fence){
-            printf("Rollback error %c\n", garbage);
+            printf("Rollback error\n");
             fclose(file_ptr);
             assert(false);
         }
@@ -952,6 +956,7 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
 
     dynarray_destroy(stack);
 
+    //printf("l-> %d\n", dynarray_length(lexeme));
     //printf("DONE LOOP\n");
 
     //printf("state -> %d\n", state);
@@ -1012,7 +1017,7 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
         
         //printf("%d\n", strlen(token.word));
         //printf("%d %d\n", last_input, input_pos);
-        //printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
+        printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
         //printf("sc %d\n", sc_state.input);
 
         bool is_ignore = false;
@@ -1098,28 +1103,26 @@ TableDFA make_tables(char *src, char* out_dir, char* save_dir, bool debug){
     return table_construct;
 }
 
+void destroy_token_sequence(Token* sequence){
+    for(int i = 0; i<dynarray_length(sequence)-1;i++){
+        printf("%d\n", i);
+        dynarray_destroy(sequence[i].word);
+    }
+}
+
 int main(){
 
-    char *num_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$06|(@sh)$07|(@ap)$08|(@mn)$09|(@bx)$10|(@vl)$11|(-/$(0|[1-9][0-9]*))$12|(-#)$13|((<([a-zA-Z_])([a-zA-Z_])*)>)$14|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
-    //char *num_regex = "-/$$10";
-
-
-
-    //TableDFA table_construct = DFAtoTable(dfa);
-    //FA_destroy(&dfa);
-    //printTableDFA(table_construct);
-    //saveDFATable(table_construct, "tables/transitions.sc");
-    //destroyDFATable(table_construct);
-    //printTableDFA(table_load);
+    char *num_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$06|(@sh)$07|(@ap)$08|(@mn)$09|(@bx)$10|(@vl)$11|(-/$(0|[1-9][0-9]*))$12|(-#)$13|((<([a-zA-Z_])([a-zA-Z_])*)>)$14|(/[(0|[1-9][0-9]*/]))$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
 
     //TableDFA garbage = make_tables(num_regex, "debug_log.txt", "tables/transitions.sc", true);
     //destroyDFATable(garbage);
     TableDFA table_load = loadDFATable("tables/transitions.sc");
 
     int ignore_cats[] = {1};
-    Token* token_list = file_scan(table_load, "languaje.k", 128, ignore_cats, 1, "muncher.txt");
+    Token* token_list = file_scan(table_load, "languaje.k", 500, ignore_cats, 1, "muncher.txt");
     print_token_seq(token_list);
     destroyDFATable(table_load);
+    destroy_token_sequence(token_list);
 
     //char *input_text ="";
     //int ignore_space[] = {1};
