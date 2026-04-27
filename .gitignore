@@ -8,5 +8,6 @@
 *.exe
 
 # Ignore logs files
-debug_log.txt
-automata_log.txt
+
+tables/
+logs/

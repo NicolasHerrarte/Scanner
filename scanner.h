@@ -75,6 +75,7 @@ void print_token_seq(Token* tokens);
 void export_transition(Transition t, FILE* out);
 void FA_export(FA fa, FILE* out);
 void export_token_seq(Token* tokens, FILE* out);
+void TableDFA_export(TableDFA table, FILE* out);
 
 void states_print(int* states);
 
@@ -116,6 +117,6 @@ void export_buffer(char* buffer, int input, int fence, int n, FILE* out);
 Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_pos, ScannerState* sc, int n);
 Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore, char* debug_directory);
 
-TableDFA make_tables(char *src, char* out_dir, char* save_dir, bool debug);
+TableDFA make_tables(char *src, char* save_table_dir, char* regex_logs_dir,  char* nfa_logs_dir, char* dfa_logs_dir, char* table_logs_dir, bool debug);
 void destroy_token_sequence(Token* sequence);
 
