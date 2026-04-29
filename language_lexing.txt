@@ -1,0 +1,3 @@
+proc isEven(n: int) -> void {
+    return n =? 0;
+}

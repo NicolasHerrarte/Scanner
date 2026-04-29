@@ -4,10 +4,16 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
+
 #include "dynarray.h"
 #include "re_pp.h"
 #include "subset.h"
 #include "scanner.h"
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 
 void export_safe_char(char c, FILE* out) {
     switch (c) {
@@ -974,8 +980,10 @@ Token next_word(TableDFA table, FILE* file_ptr, bool** failed_table, int* input_
     }
 }
 
-Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore, char* muncher_dir, char* finished_scan_dir){
+Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_cats, int amount_ignore, char* logs_dir){
     FILE* file_ptr = fopen(directory, "r");
+    assert(file_ptr != NULL);
+
     Token* token_list = dynarray_create(Token);
 
     ScannerState sc_state;
@@ -987,6 +995,8 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
 
     long file_size = stream_len(file_ptr)+2;
 
+    char muncher_dir[PATH_MAX];
+    snprintf(muncher_dir, sizeof(muncher_dir), "%s/%s", logs_dir, "muncher_log.txt");
     FILE* muncher_out = fopen(muncher_dir, "w");
     export_buffer(sc_state.buffer, sc_state.input, sc_state.fence, buffer_size, muncher_out);
 
@@ -1004,7 +1014,7 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
         failed_table[i] = calloc(file_size, sizeof(bool));
     }
 
-    //printf("SIZE --- %d\n", file_size);
+    printf("SIZE --- %d\n", file_size);
 
     while(input_pos < file_size-2){
         Token token = next_word(table, file_ptr, failed_table, &input_pos, &sc_state, buffer_size);
@@ -1013,7 +1023,6 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
         export_buffer(sc_state.buffer, sc_state.input, sc_state.fence, buffer_size, muncher_out);
         
         //printf("%d\n", strlen(token.word));
-        //printf("%d %d\n", last_input, input_pos);
         //printf("str: %s, cat: %d input: %d\n", token.word, token.category, input_pos);
         //printf("sc %d\n", sc_state.input);
 
@@ -1045,14 +1054,16 @@ Token* file_scan(TableDFA table, char* directory, int buffer_size, int* ignore_c
     free(sc_state.buffer);
     fclose(file_ptr);
 
-    FILE* scan_out = fopen(finished_scan_dir, "w");
+    char token_list_dir[PATH_MAX];
+    snprintf(token_list_dir, sizeof(token_list_dir), "%s/%s", logs_dir, "token_list_log.txt");
+    FILE* scan_out = fopen(token_list_dir, "w");
     export_token_seq(token_list, scan_out);
     fclose(scan_out);
 
     return token_list;
 }
 
-TableDFA make_tables(char *src, char* save_table_dir, char* regex_logs_dir, char* split_logs_dir, char* nfa_logs_dir, char* dfa_logs_dir, char* table_logs_dir, bool debug){
+TableDFA make_tables(char *src, char* save_table_dir, char* logs_dir, bool debug){
     if(debug){
         printf("Initializing non finite automata...\n");
     }
@@ -1068,6 +1079,8 @@ TableDFA make_tables(char *src, char* save_table_dir, char* regex_logs_dir, char
         printf("Creating nfa...\n");
     }
 
+    char split_logs_dir[PATH_MAX];
+    snprintf(split_logs_dir, sizeof(split_logs_dir), "%s/%s", logs_dir, "split_log.txt");
     FILE* out_split = fopen(split_logs_dir, "w");
     find_split_point(&nfa, regex, fragment_start, false, true, out_split);
     fclose(out_split);
@@ -1093,26 +1106,42 @@ TableDFA make_tables(char *src, char* save_table_dir, char* regex_logs_dir, char
         printf("Saving logs...\n");
     }
 
+    char regex_logs_dir[PATH_MAX];
+    snprintf(regex_logs_dir, sizeof(regex_logs_dir), "%s/%s", logs_dir, "regex_log.txt");
     FILE* out_regex = fopen(regex_logs_dir, "w");
     fprintf(out_regex, "%s\n", regex);
     fclose(out_regex);
 
+    char nfa_logs_dir[PATH_MAX];
+    snprintf(nfa_logs_dir, sizeof(nfa_logs_dir), "%s/%s", logs_dir, "nfa_log.txt");
     FILE* out_nfa = fopen(nfa_logs_dir, "w");
     FA_export(nfa, out_nfa);
     fclose(out_nfa);
 
+    char dfa_logs_dir[PATH_MAX];
+    snprintf(dfa_logs_dir, sizeof(dfa_logs_dir), "%s/%s", logs_dir, "dfa_log.txt");
     FILE* out_dfa = fopen(dfa_logs_dir, "w");
     FA_export(dfa, out_dfa);
     fclose(out_dfa);
 
+    char table_logs_dir[PATH_MAX];
+    snprintf(table_logs_dir, sizeof(table_logs_dir), "%s/%s", logs_dir, "table_log.txt");
     FILE* out_table = fopen(table_logs_dir, "w");
     TableDFA_export(table_construct, out_table);
     fclose(out_table);
+
+    if(debug){
+        printf("Releasing memory...\n");
+    }
 
     FA_destroy(&nfa);
     dynarray_destroy(regex);
 
     FA_destroy(&dfa);
+
+    if(debug){
+        printf("Done!\n");
+    }
 
     return table_construct;
 }
@@ -1125,21 +1154,36 @@ void destroy_token_sequence(Token* sequence){
 
 int main(){
 
-    char *num_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$06|(@sh)$07|(@ap)$08|(@mn)$09|(@bx)$10|(@vl)$11|(-/$(0|[1-9][0-9]*))$12|(-#)$13|((<([a-zA-Z_])([a-zA-Z_])*)>)$14|(/[(0|[1-9][0-9]*/]))$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
+    char* logs_dir_rules = "logs/rules";
+    char* logs_dir_language = "logs/language";
 
-    //TableDFA garbage = make_tables(num_regex, "tables/transitions.sc", "logs/regex_log.txt", "logs/split_log.txt", "logs/nfa_log.txt", "logs/definite_log.txt", "logs/table_log.txt", true);
-    //destroyDFATable(garbage);
-    TableDFA table_load = loadDFATable("tables/transitions.sc");
+    char *rules_regex = "(([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])([a-zA-Z/(/)/*///-/[/]+=?><.;{},:/|&])*)$02|///|$03|(//->)$04|//;$05|(//%%//)$06|(@sh)$07|(@ap)$08|(@mn)$09|(@bx)$10|(@vl)$11|(-/$(0|[1-9][0-9]*))$12|(-#)$13|((<([a-zA-Z_])([a-zA-Z_])*)>)$14|(/[(0|[1-9][0-9]*)/])$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
 
-    int ignore_cats[] = {1};
-    Token* token_list = file_scan(table_load, "languaje.k", 500, ignore_cats, 1, "logs/muncher.txt", "logs/token_list.txt");
-    //print_token_seq(token_list);
-    //destroyDFATable(table_load);
-    //destroy_token_sequence(token_list);
+    TableDFA garbage_rules = make_tables(rules_regex, "tables/transitions_rules.sc", logs_dir_rules, true);
+    destroyDFATable(garbage_rules);
+    TableDFA table_load_rules = loadDFATable("tables/transitions_rules.sc");
 
-    //char *input_text ="";
-    //int ignore_space[] = {1};
-    //Token* tokens = scanner_loop_file(dfa, "source_code.txt", ignore_space, 1);
+    int ignore_cats_rules[] = {1};
+    Token* token_list_rules = file_scan(table_load_rules, "rules_lexing.txt", 500, ignore_cats_rules, 1, logs_dir_rules);
 
-    //print_token_seq(tokens);
+    destroyDFATable(table_load_rules);
+    destroy_token_sequence(token_list_rules);
+
+    char *language_regex = "(=?)$20|(>=)$21|(<=)$22|(>)$23|(<)$24|(/|/|)$25|(&&)$26|+$07|-$08|/*$09|//$10|/($11|/)$12|/[$16|/]$17|.$18|,$19|(0|[1-9][0-9]*)$13|((0|[1-9][0-9]*).[0-9][0-9]*)f$14|(\"([a-zA-Z0-9_][a-zA-Z0-9_]*)\")$27|(true)$28|(false)$29|(if)$35|(else)$36|(while)$37|(for)$38|(init)$39|(proc)$40|(return)$41|({)$42|(})$43|(;)$44|(<-)$45|(=)$46|(:)$47|(->)$48|(int)$49|(bool)$50|(float)$51|(string)$52|(void)$53|(break)$54|(continue)$55|(assign)$56|([a-zA-Z_][a-zA-Z0-9_]*)$15|(( |\n|\t|\r)( |\n|\t|\r)*)$01";
+    //void 51
+    // || 25
+    // %% 26
+
+    // added 3 symbols
+
+    TableDFA garbage_language = make_tables(language_regex, "tables/transitions_language.sc", logs_dir_language, true);
+    destroyDFATable(garbage_language);
+    TableDFA table_load_language = loadDFATable("tables/transitions_language.sc");
+
+    int ignore_cats_language[] = {1};
+    Token* token_list_language = file_scan(table_load_language, "language_lexing.txt", 500, ignore_cats_language, 1, logs_dir_language);
+
+    destroyDFATable(table_load_language);
+    destroy_token_sequence(token_list_language);
+
 }
